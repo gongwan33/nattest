@@ -53,7 +53,7 @@ int main(){
 		fprintf(fp, "bind to port [%d]\n", port);
 		
 		int i = 0;
-		for(i = 0; i < 5; i++){		
+		for(i = 0; i < 20; i++){		
 			recvfrom(sfd, recv, sizeof(recv), 0, (struct sockaddr *)&sin, &sin_len);
 			printf("Recieve from %s [%d]:%s\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port), recv);
 			fprintf(fp, "Recieve from %s [%d]:%s\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port), recv);

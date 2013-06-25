@@ -12,7 +12,7 @@
 #define server_ip_1 "58.214.236.114"
 #define server_ip_2 "192.168.0.188"
 #define server_port 61000
-#define count 5
+#define count 20 
 
 int main(){
 	int sockfd;
