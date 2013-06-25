@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #define MAXline 1024
-#define server_ip "192.168.1.197"
+#define server_ip "58.214.236.114"
 #define client_ip "192.168.1.166"
 #define server_port 61000
 #define count 5
