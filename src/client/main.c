@@ -27,7 +27,7 @@ int main(){
 	memset (&local_addr, 0, sizeof local_addr);
         local_addr.sin_family = AF_INET;
         local_addr.sin_addr.s_addr = htonl (INADDR_ANY);
-        local_addr.sin_port = htons(0);
+        local_addr.sin_port = htons(1888);
 	
 	
 		
