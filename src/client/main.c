@@ -9,8 +9,8 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 
-#define server_ip_1 "58.214.236.114"
-#define server_ip_2 "192.168.0.188"
+#define server_ip_1 "192.168.1.115"
+#define server_ip_2 "192.168.1.116"
 #define server_port 61000
 #define count 20 
 
@@ -91,12 +91,14 @@ int main(){
 
 		printf("-------------------Nat Test Package Sending---------------------\n");
 	
-		sprintf(ip_info,"%s [%d]", inet_ntoa(*(struct in_addr *)ip), port);
+		sprintf(ip_info,"#1 %s [%d]", inet_ntoa(*(struct in_addr *)ip), port);
 	
 		for(i = 0; i < count; i++){
 			sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1,sizeof(servaddr1)); 
 		}
 		
+		sprintf(ip_info,"#2 %s [%d]", inet_ntoa(*(struct in_addr *)ip), port);
+
 		for(i = 0; i < count; i++){
 			sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr2,sizeof(servaddr2)); 
 		}
