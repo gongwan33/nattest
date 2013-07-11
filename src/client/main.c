@@ -96,6 +96,8 @@ int main(){
 		for(i = 0; i < count; i++){
 			sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1,sizeof(servaddr1)); 
 		}
+
+		usleep(1000000);
 		
 		sprintf(ip_info,"#2 %s [%d]", inet_ntoa(*(struct in_addr *)ip), port);
 

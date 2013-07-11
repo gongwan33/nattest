@@ -8,11 +8,12 @@
 #include <netdb.h>
 
 #define PORT1 61000
-#define ip1   192.168.1.115
-#define ip2   192.168.1.116
+#define ip1   "192.168.1.115"
+#define ip2   "192.168.1.116"
 
 char pathname[50] = "./natinfo.log";
 int chang_ip = 0;
+int port_flag = 0;
 
 int main(){
 	int sin_len;
@@ -40,9 +41,18 @@ int main(){
 
 		bzero(&sin, sizeof(sin));
 		sin.sin_family = AF_INET;
-		sin.sin_addr.s_addr = htonl(INADDR_ANY);
-//		if(chang_ip == 0) sin.sin_addr.s_addr = inet_addr("ip1");
-//		else sin.sin_addr.s_addr = inet_addr("ip2");
+//		sin.sin_addr.s_addr = htonl(INADDR_ANY);
+//		sin.sin_addr.s_addr = inet_addr("192.168.1.115");
+
+		if(chang_ip == 0){
+			sin.sin_addr.s_addr = inet_addr(ip1);
+			printf("bind ip1 \n");
+		}
+		else{
+			sin.sin_addr.s_addr = inet_addr(ip2);
+			printf("bind ip2 \n");		
+		}
+
 		sin.sin_port = htons(port);
 		sin_len = sizeof(sin);
 				
@@ -64,12 +74,16 @@ int main(){
 			fprintf(fp, "Recieve from %s [%d]:%s\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port), recv);
 		}
 
-		if(port < (PORT1 + 2) && chang_ip%2 != 0)port++;
-		else if(port >= (PORT1 +2)){
+		if(port < (PORT1 + 2) && port_flag % 2 != 0)
+			port++;
+		else if(port >= (PORT1 + 2) && port_flag % 2 != 0){
 			port = PORT1;
+			port_flag = 0;
 			chang_ip = 0;
 		}
-		chang_ip++;
+
+		port_flag++;
+		chang_ip = !chang_ip;
 		fclose(fp);
 		close(sfd);
 	}
