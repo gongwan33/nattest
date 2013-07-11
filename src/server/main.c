@@ -8,8 +8,11 @@
 #include <netdb.h>
 
 #define PORT1 61000
+#define ip1   192.168.1.115
+#define ip2   192.168.1.116
 
 char pathname[50] = "./natinfo.log";
+int chang_ip = 0;
 
 int main(){
 	int sin_len;
@@ -37,7 +40,9 @@ int main(){
 
 		bzero(&sin, sizeof(sin));
 		sin.sin_family = AF_INET;
-		sin.sin_addr.s_addr = htonl(INADDR_ANY);
+//		sin.sin_addr.s_addr = htonl(INADDR_ANY);
+		if(chang_ip == 0) sin.sin_addr.s_addr = inet_addr("ip1");
+		else sin.sin_addr.s_addr = inet_addr("ip2");
 		sin.sin_port = htons(port);
 		sin_len = sizeof(sin);
 				
@@ -60,7 +65,10 @@ int main(){
 		}
 
 		if(port < (PORT1 + 2))port++;
-		else port = PORT1;
+		else{
+			port = PORT1;
+			chang_ip = !chang_ip;
+		}
 
 		fclose(fp);
 		close(sfd);
