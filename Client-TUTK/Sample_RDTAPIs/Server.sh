@@ -1,1 +1,1 @@
-./RDTServer 34991R692UZ8G6PWFZT ./log.txt 3
+./RDTServer EF4T95PY8EAFBGPPWFZT ./log.txt 3
