@@ -1,0 +1,33 @@
+IOTC Server Release Note
+(Legend: '+' means the newly added features,
+         'o' means the modified or improved features
+         '*' means critical bugs fix
+         '-' means the removed features )
+==============================================================================================
+[13W19]
+  - IOTC Server <1.0.3.0>
+    + Add support for client site calls IOTC_Connect_ByUID_Parallel().
+
+==============================================================================================
+[13W10P1]
+  - IOTC Server <1.0.2.0>
+    * Improve relay reliability.
+
+==============================================================================================
+[13W10]
+  - IOTC Server <1.0.1.0>
+    + Detect multiple login of UID. Log the information in IOTC server
+    + Reduce log amount
+    o Setup P2P/Relay white list or black list by SQLite and will take effect immediately
+	
+==============================================================================================	
+[12W51]
+  - IOTC Server <0.5.2.0>
+    + Add blacklist and whitelist mechanism in IOTC server
+    + Add user manual: AV module service type and IO control reference guide
+
+==============================================================================================
+[12W38]
+  - IOTC Server <0.5.0.0>
+    + Add watchdog mechanism in IOTC server
+    o Change diagnostic mechanism in IOTC server by using native file system
