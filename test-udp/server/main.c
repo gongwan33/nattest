@@ -12,13 +12,15 @@
 
 int main(){
 	int sin_len;
-	char recv[100];
+	char *recv;
 	int port = PORT1;
 
 	int package_count = 0;
 
 	int sfd;
 	struct sockaddr_in sin;	
+
+	recv = (char *)malloc(1024*10);
 	
 	printf("-------------------Nat Test Listening(UDP)---------------------\n");
 
@@ -49,6 +51,7 @@ int main(){
 
 
 		close(sfd);
+		free(recv);
 
 
 	return 0;
