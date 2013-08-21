@@ -20,7 +20,7 @@ int main(){
 	int sfd;
 	struct sockaddr_in sin;	
 
-	recv = (char *)malloc(1024*10);
+	recv = (char *)malloc(1024*1024);
 	
 	printf("-------------------Nat Test Listening(UDP)---------------------\n");
 
