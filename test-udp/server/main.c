@@ -52,11 +52,10 @@ int main(){
 			int rec_size = recvfrom(sfd, recv, test_size, 0, (struct sockaddr *)&sin, &sin_len);
 			package_count++;
 		//	printf("Recieve from %s [%d]:%s\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port), recv);
-		//	printf("recv:Package Num = %d; size = %d data = %s\n", package_count, rec_size, recv);
+			printf("recv:Package Num = %d; size = %d data = %s\n", package_count, rec_size, recv);
 		}
 
 
-		printf("recv:Package Num = %d; data = %s\n", package_count, recv);
 		
 		close(sfd);
 		free(recv);
