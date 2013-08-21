@@ -43,10 +43,10 @@ int main(){
 
 		int i = 0;
 		for(i = 0; i < count; i++){		
-			recvfrom(sfd, recv, sizeof(recv), 0, (struct sockaddr *)&sin, &sin_len);
+			int rec_size = recvfrom(sfd, recv, sizeof(recv), 0, (struct sockaddr *)&sin, &sin_len);
 			package_count++;
 		//	printf("Recieve from %s [%d]:%s\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port), recv);
-			printf("recv:Package Num = %d\n", package_count);
+			printf("recv:Package Num = %d; size = %d\n", package_count, rec_size);
 		}
 
 
