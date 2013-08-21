@@ -6,12 +6,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #define MAXline 1024
-#define server_ip "192.168.1.168"
+#define server_ip "58.214.236.114"
 #define client_ip "192.168.1.168"
 #define server_port 61000
 #define count 1000 
-#define gap_between_package 2000 //unit: us
-#define test_size 1024 
+#define gap_between_package 10 //unit: us
+#define test_size 6 
 
 int main(){
 	int sockfd;
