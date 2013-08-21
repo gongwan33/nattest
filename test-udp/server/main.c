@@ -8,7 +8,7 @@
 #include <netdb.h>
 
 #define PORT1 61000
-#define count 1000 
+#define count 1000
 
 int main(){
 	int sin_len;
@@ -19,6 +19,8 @@ int main(){
 
 	int sfd;
 	struct sockaddr_in sin;	
+
+	char size[10];
 
 	recv = (char *)malloc(1024*1024);
 	
@@ -41,12 +43,16 @@ int main(){
 		
 		printf("bind to port [%d]\n", port);
 
+		recvfrom(sfd, size, sizeof(size), 0, (struct sockaddr *)&sin, &sin_len);
+		int test_size = atoi(size);
+		printf("test size is %d\n", test_size);
+
 		int i = 0;
 		for(i = 0; i < count; i++){		
-			int rec_size = recvfrom(sfd, recv, sizeof(recv), 0, (struct sockaddr *)&sin, &sin_len);
+			int rec_size = recvfrom(sfd, recv, test_size, 0, (struct sockaddr *)&sin, &sin_len);
 			package_count++;
 		//	printf("Recieve from %s [%d]:%s\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port), recv);
-			printf("recv:Package Num = %d; size = %d\n", package_count, rec_size);
+			printf("recv:Package Num = %d; size = %d data = %s\n", package_count, rec_size, recv);
 		}
 
 
