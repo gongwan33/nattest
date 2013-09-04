@@ -10,13 +10,13 @@
 #include <net/if.h>
 #include <JEANP2PPRO.h>
 
-#define server_ip_1 "192.168.1.216"
+#define server_ip_1 "192.168.72.134"
 #define server_ip_2 "192.168.1.116"
 
 #define USERNAME "wang"
 #define PASSWD "123456"
 
-#define ACT_NETCARD "eth1"
+#define ACT_NETCARD "eth0"
 #define server_port 61000
 #define local_port 6888
 
@@ -150,9 +150,10 @@ int main(){
 		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		char result;
 		sscanf(Ctl_Rec, "%c %c", &Rec_W, &result);
+
 		if(Rec_W == V_RESP){
 			printf("Receive ctl_w = %d result = %d\n", Rec_W, result);
-			if(result == 0){
+			if(result == 1){
 				printf("Verify success!\n");
 				break;
 			}
@@ -161,8 +162,10 @@ int main(){
 				return WRONG_VERIFY;
 			}
 		}
-
 	}
+	
+	printf("----------------------------- Finding peers ------------------------------\n");
+
 
 	/*
 	   for(j = 0; j < 10; j++){

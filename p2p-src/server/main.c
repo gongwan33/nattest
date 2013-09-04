@@ -9,7 +9,7 @@
 #include <JEANP2PPRO.h>
 
 #define PORT1 61000
-#define ip1   "192.168.1.216"
+#define ip1   "192.168.72.134"
 #define ip2   "192.168.1.116"
 
 #define UNAME "wang"
@@ -56,7 +56,7 @@ void init_recv_sin(){
 
 int main(){
 	int ret = 0;
-	char Ctl_W[1];
+	char Ctl_W;
 	char Get_W;
 	char RESP[50];
 
@@ -83,17 +83,17 @@ int main(){
 
 			if((strcmp(UNAME, Uname) != 0) || (strcmp(PASSWD, Passwd) != 0)){
 					printf("Username or password error!!\n");
-					Ctl_W[0] = V_RESP; 
-					char RESP_res = 0x1;
-					sprintf(RESP, "%d %d", Ctl_W[0], RESP_res);
+					Ctl_W = V_RESP; 
+					char RESP_res = 0x2;
+					sprintf(RESP, "%c %c", Ctl_W, RESP_res);
 					sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)&recv_sin, recv_sin_len);
 					printf("Send response.\n");
 			}
 			else{
 					printf("Username and password verifying passed!!\n");
-					Ctl_W[0] = V_RESP; 
-					char RESP_res = 0x0;
-					sprintf(RESP, "%d %d", Ctl_W[0], RESP_res);
+					Ctl_W = V_RESP; 
+					char RESP_res = 0x1;
+					sprintf(RESP, "%c %c", Ctl_W, RESP_res);
 					sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)&recv_sin, recv_sin_len);
 					printf("Send response.\n");
 			}
