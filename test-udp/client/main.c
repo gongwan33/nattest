@@ -10,8 +10,8 @@
 #define client_ip "192.168.1.168"
 #define server_port 61000
 #define count 1000 
-#define gap_between_package 10 //unit: us
-#define test_size 6 
+#define gap_between_package 10000 //unit: us
+#define test_size 1024*9 
 
 int main(){
 	int sockfd;
