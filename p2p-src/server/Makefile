@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -lpthread
 OBJS = main.o
-TARGET = natclient
+TARGET = natserver
 
 $(TARGET): $(OBJS) 
 	$(CC) $(OBJS) -o $(TARGET) $(CFLAGS)
