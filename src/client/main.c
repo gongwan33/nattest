@@ -9,7 +9,7 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 
-#define server_ip_1 "192.168.1.115"
+#define server_ip_1 "192.168.1.216"
 #define server_ip_2 "192.168.1.116"
 #define server_port 61000
 #define count 20 
@@ -27,7 +27,7 @@ int main(){
 	memset (&local_addr, 0, sizeof local_addr);
         local_addr.sin_family = AF_INET;
         local_addr.sin_addr.s_addr = htonl (INADDR_ANY);
-        local_addr.sin_port = htons(1888);
+        local_addr.sin_port = htons(6888);
 	
 	
 		

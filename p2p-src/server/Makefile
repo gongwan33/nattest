@@ -1,7 +1,8 @@
 CC = gcc
-CFLAGS = -lpthread
+CFLAGS = -lpthread -$(INCLUDE)
 OBJS = main.o
 TARGET = natserver
+INCLUDE = I./Include
 
 $(TARGET): $(OBJS) 
 	$(CC) $(OBJS) -o $(TARGET) $(CFLAGS)

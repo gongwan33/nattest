@@ -8,6 +8,7 @@
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
 #include <net/if.h>
+#include <JEANP2PPRO.h>
 
 #define server_ip_1 "192.168.1.216"
 #define server_ip_2 "192.168.1.116"
@@ -19,17 +20,17 @@
 #define server_port 61000
 #define local_port 6888
 
-static struct sockaddr_in servaddr1,servaddr2,local_addr;
-static struct ifreq ifr,*pifr;
+static struct sockaddr_in servaddr1, servaddr2, local_addr, recv_sin;
+static struct ifreq ifr, *pifr;
 static struct ifconf ifc;
 static char ip_info[50];
 static int sockfd;
-static int port, sin_size;
+static int port, sin_size, recv_sin_len;
 static char mac[6], ip[4], buff[1024];
 
 
 int local_net_init(){
-	memset(&local_addr, 0, sizeof local_addr);
+	memset(&local_addr, 0, sizeof(local_addr));
 	local_addr.sin_family = AF_INET;
 	local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	local_addr.sin_port = htons(local_port);
@@ -45,6 +46,14 @@ int local_net_init(){
 	}
 
 	return 0;
+}
+
+void init_recv_sin(){
+	memset(&recv_sin, 0, sizeof(recv_sin));
+	recv_sin.sin_family = AF_INET;
+	recv_sin.sin_addr.s_addr = inet_addr("1.1.1.1");
+	recv_sin.sin_port = htons(10000);
+	recv_sin_len = sizeof(recv_sin);
 }
 
 int get_local_ip_port(){
@@ -97,8 +106,17 @@ int set_ip1_struct(char * ip1, int port){
 	return 0;
 }
 
+int set_rec_timeout(int usec, int sec){
+	struct timeval tv_out;
+    tv_out.tv_sec = sec;
+    tv_out.tv_usec = usec;
+
+	setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,&tv_out, sizeof(tv_out));
+}
+
 int main(){
 	int  i;
+	char Rec_W[1];
 	int ret = 0;
 	
 	ret = local_net_init();
@@ -123,11 +141,16 @@ int main(){
 	for(i = 0; i < 10; i++){
 
 		sprintf(ip_info,"%s %s", USERNAME, PASSWD);
-		printf("send %s\n", ip_info);
+		printf("Send uname and passwd\n");
+		sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 
-		sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1,sizeof(servaddr1)); 
+		set_rec_timeout(0, 1);//(usec, sec)
+		recvfrom(sockfd, Rec_W, 1, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		if(Rec_W[0] == GET_OK){
+			printf("Receive ctl_w = %d\n", Rec_W[0]);
+			break;
+		}
 
-		usleep(1000000);
 	}
 
 	/*

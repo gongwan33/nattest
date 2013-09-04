@@ -8,7 +8,7 @@
 #include <netdb.h>
 
 #define PORT1 61000
-#define ip1   "192.168.1.115"
+#define ip1   "192.168.1.216"
 #define ip2   "192.168.1.116"
 
 char pathname[50] = "./natinfo.log";
