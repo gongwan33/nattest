@@ -12,12 +12,14 @@
 #define ip1   "192.168.1.216"
 #define ip2   "192.168.1.116"
 
+#define UNAME "wang"
+#define PASSWD "123456"
 
 static char pathname[50] = "./natinfo.log";
 static int sfd;
 static struct sockaddr_in sin, recv_sin;	
 static int sin_len, recv_sin_len;
-static char recv_str[100];
+static char recv_str[50];
 static int port = PORT1;
 static char Uname[10];
 static char Passwd[10];
@@ -55,6 +57,8 @@ void init_recv_sin(){
 int main(){
 	int ret = 0;
 	char Ctl_W[1];
+	char Get_W;
+	char RESP[50];
 
 	ret = local_net_init();
 	if(ret < 0){
@@ -68,13 +72,33 @@ int main(){
 
 	while(1){		
 		recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-		sscanf(recv_str, "%s %s", Uname, Passwd);
-		printf("Recieve from %s [%d]:%s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Uname, Passwd);
+		Get_W = recv_str[0];
+		printf("OPCODE = %d\n", Get_W);
 
-		Ctl_W[0] = GET_OK; 
-		sendto(sfd, Ctl_W, 1, 0, (struct sockaddr *)&recv_sin, recv_sin_len);
-		printf("Send response.\n");
-		
+		switch(Get_W){
+			case V_UAP:
+			sscanf(recv_str, "%c %s %s", &Get_W, Uname, Passwd);
+			printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
+			printf("Verify result: Uname = %d Passwd = %d\n", strcmp(UNAME, Uname), strcmp(PASSWD, Passwd));
+
+			if((strcmp(UNAME, Uname) != 0) || (strcmp(PASSWD, Passwd) != 0)){
+					printf("Username or password error!!\n");
+					Ctl_W[0] = V_RESP; 
+					char RESP_res = 0x1;
+					sprintf(RESP, "%d %d", Ctl_W[0], RESP_res);
+					sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)&recv_sin, recv_sin_len);
+					printf("Send response.\n");
+			}
+			else{
+					printf("Username and password verifying passed!!\n");
+					Ctl_W[0] = V_RESP; 
+					char RESP_res = 0x0;
+					sprintf(RESP, "%d %d", Ctl_W[0], RESP_res);
+					sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)&recv_sin, recv_sin_len);
+					printf("Send response.\n");
+			}
+
+		}
 	}
 
 	close(sfd);

@@ -116,7 +116,9 @@ int set_rec_timeout(int usec, int sec){
 
 int main(){
 	int  i;
-	char Rec_W[1];
+	char Ctl_Rec[50];
+	char Rec_W;
+	char Sen_W;
 	int ret = 0;
 	
 	ret = local_net_init();
@@ -139,16 +141,25 @@ int main(){
 
 	printf("------------------- Connection and user name verifying ---------------------\n");
 	for(i = 0; i < 10; i++){
-
-		sprintf(ip_info,"%s %s", USERNAME, PASSWD);
+		Sen_W = V_UAP;
+		sprintf(ip_info,"%c %s %s", Sen_W, USERNAME, PASSWD);
 		printf("Send uname and passwd\n");
 		sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 
 		set_rec_timeout(0, 1);//(usec, sec)
-		recvfrom(sockfd, Rec_W, 1, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-		if(Rec_W[0] == GET_OK){
-			printf("Receive ctl_w = %d\n", Rec_W[0]);
-			break;
+		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		char result;
+		sscanf(Ctl_Rec, "%c %c", &Rec_W, &result);
+		if(Rec_W == V_RESP){
+			printf("Receive ctl_w = %d result = %d\n", Rec_W, result);
+			if(result == 0){
+				printf("Verify success!\n");
+				break;
+			}
+			else{ 
+				printf("Verify failed!\n");
+				return WRONG_VERIFY;
+			}
 		}
 
 	}
