@@ -21,7 +21,7 @@
 #define server_port 61000
 #define local_port 6788
 
-static struct sockaddr_in servaddr1, servaddr2, local_addr, recv_sin;
+static struct sockaddr_in servaddr1, local_addr, recv_sin, master_sin;
 static struct ifreq ifr, *pifr;
 static struct ifconf ifc;
 static char ip_info[50];
@@ -123,10 +123,17 @@ void Send_VUAPS(){
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
 
+void Send_IP_REQ(){
+	char Sen_W;
+	Sen_W = REQ_M_IP;
+	sprintf(ip_info,"%c %s", Sen_W, USERNAME);
+	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+}
+
 void Send_CMD(char Ctls, char Res){
 	char Sen_W;
 	Sen_W = Ctls;
-	sprintf(ip_info,"%c %c ", Sen_W, Res);
+	sprintf(ip_info,"%c %c", Sen_W, Res);
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
 
@@ -171,7 +178,8 @@ int main(){
 		set_rec_timeout(0, 1);//(usec, sec)
 		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		char result;
-		sscanf(Ctl_Rec, "%c %c", &Rec_W, &result);
+		Rec_W = Ctl_Rec[0];
+		result = Ctl_Rec[2];
 
 		if(Rec_W == GET_REQ){
 			printf("Receive ctl_w = %d result = %d\n", Rec_W, result);
@@ -198,6 +206,24 @@ int main(){
 
 	printf("------------------ Establish connection!-------------------\n");
 
+	for(i = 0; i < 10; i++){
+		Send_IP_REQ();
+		printf("Send IP_REQ.\n");
+
+		set_rec_timeout(0, 1);//(usec, sec)
+		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		Rec_W = Ctl_Rec[0];
+
+		if(Rec_W == RESP_M_IP){
+			printf("Receive ctl_w = %d\n", Rec_W);
+			memcpy(&master_sin, Ctl_Rec + 1, sizeof(struct sockaddr_in));
+			printf("Get master IP: %s\n", inet_ntoa(master_sin.sin_addr));
+		}
+
+	}
+
+	if(i >= 10) return OUT_TRY;
+	
 
 	
 	/*

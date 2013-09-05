@@ -18,7 +18,6 @@
 #define UNAME "wang"
 #define PASSWD "123456"
 
-extern char * t_name;
 
 static char pathname[50] = "./natinfo.log";
 static int sfd;
@@ -108,6 +107,22 @@ int Send_S_IP(char * name){
 		}
 	}
 	set_rec_timeout(0, 0);	
+}
+
+int Send_M_IP(char * name){
+	char RESP[50];
+	char GET_W;
+	char res;
+	struct node_net * tmp_node;
+	int i;
+	tmp_node = find_item(name);
+	if(tmp_node == NULL) return -1;
+
+	RESP[0] = RESP_M_IP;
+	memcpy(RESP + 1, tmp_node->recv_sin_m, sizeof(struct sockaddr_in));
+	
+	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)tmp_node->recv_sin_s, recv_sin_len);
+	printf("Send master ip to slave!%s\n", inet_ntoa(tmp_node->recv_sin_m->sin_addr));
 }
 
 int Peer_Login_Init(){
@@ -238,12 +253,12 @@ int main(){
 					printf("Username and password verifying passed!!\n");
 
 					int Find_Success = 0;
-					if(Find_Peer(Uname) == 0){
+					if(Find_Peer(Uname) != 0){
 							Find_Success = 1;
 							printf("Node find success!! Now index at %d\n", Peers_Sheet_Index);
 					}
 
-					if(!Find_Success){
+					if(Find_Success){
 						Send_CMD(GET_REQ, 0x4);
 						printf("Send response.\n");
 						ret = Peer_Set_Slave(Uname, &recv_sin);
@@ -260,7 +275,27 @@ int main(){
 					}
 				}
 				break;
+				
+			case REQ_M_IP:
+				sscanf(recv_str, "%c %s", &Get_W, Uname);
+				//printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
+				if(Uname == NULL){
+					printf("Error:User name is NULL!!");
+					break;
+				}
 
+				printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
+
+				int Find_Success = 0;
+				if(Find_Peer(Uname) != 0){
+					Find_Success = 1;
+					printf("Node find success!! Now index at %d\n", Peers_Sheet_Index);
+				}
+
+				if(Find_Success){
+					Send_M_IP(Uname);
+				}
+				break;
 
 			case KEEP_CON:
 				Send_CMD(GET_REQ, 0x03);
