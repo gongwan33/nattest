@@ -10,7 +10,7 @@
 #include <net/if.h>
 #include <JEANP2PPRO.h>
 
-#define server_ip_1 "192.168.72.134"
+#define server_ip_1 "192.168.1.110"
 #define server_ip_2 "192.168.1.116"
 
 #define USERNAME "wang"
@@ -114,11 +114,17 @@ int set_rec_timeout(int usec, int sec){
 	setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,&tv_out, sizeof(tv_out));
 }
 
+void Send_VUAP(){
+	char Sen_W;
+	Sen_W = V_UAP;
+	sprintf(ip_info,"%c %s %s", Sen_W, USERNAME, PASSWD);
+	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+}
+
 int main(){
 	int  i;
 	char Ctl_Rec[50];
 	char Rec_W;
-	char Sen_W;
 	int ret = 0;
 	
 	ret = local_net_init();
@@ -141,10 +147,8 @@ int main(){
 
 	printf("------------------- Connection and user name verifying ---------------------\n");
 	for(i = 0; i < 10; i++){
-		Sen_W = V_UAP;
-		sprintf(ip_info,"%c %s %s", Sen_W, USERNAME, PASSWD);
+		Send_VUAP();
 		printf("Send uname and passwd\n");
-		sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 
 		set_rec_timeout(0, 1);//(usec, sec)
 		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
@@ -154,7 +158,11 @@ int main(){
 		if(Rec_W == V_RESP){
 			printf("Receive ctl_w = %d result = %d\n", Rec_W, result);
 			if(result == 1){
-				printf("Verify success!\n");
+				printf("Verify and regist success!\n");
+				break;
+			}
+			else if(result == 3){
+				printf("Verify success but regist failed. Maybe node already exists!\n");
 				break;
 			}
 			else{ 
@@ -163,10 +171,9 @@ int main(){
 			}
 		}
 	}
+
+	if(i >= 10) return OUT_TRY;
 	
-	printf("----------------------------- Finding peers ------------------------------\n");
-
-
 	/*
 	   for(j = 0; j < 10; j++){
 
