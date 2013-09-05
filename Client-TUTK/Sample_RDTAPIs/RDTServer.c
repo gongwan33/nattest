@@ -159,7 +159,8 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 	
-	int ret = IOTC_Initialize(0, "192.168.1.115", "192.168.1.116", "m2.iotcplatform.com", "m4.iotcplatform.com");
+//	int ret = IOTC_Initialize(0, "192.168.1.115", "192.168.1.116", "m2.iotcplatform.com", "m4.iotcplatform.com");
+	int ret = IOTC_Initialize(0, "192.168.1.115", "192.168.1.116", "192.168.1.115", "192.168.1.116");
 	if(ret != IOTC_ER_NoERROR)
 	{
 		printf("IOTC_Initialize error!!\n");
