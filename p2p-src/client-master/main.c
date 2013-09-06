@@ -10,7 +10,7 @@
 #include <net/if.h>
 #include <JEANP2PPRO.h>
 
-#define server_ip_1 "192.168.1.110"
+#define server_ip_1 "192.168.1.216"
 #define server_ip_2 "192.168.1.116"
 
 #define USERNAME "wang"
@@ -173,6 +173,8 @@ int main(){
 	}
 
 	if(i >= 10) return OUT_TRY;
+
+	printf("------------------ Wait for slave to establish connection!-------------------\n");
 	
 	/*
 	   for(j = 0; j < 10; j++){
