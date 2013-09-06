@@ -9,7 +9,7 @@
 #include <JEANP2PPRO.h>
 
 #define PORT1 61000
-#define ip1   "192.168.1.110"
+#define ip1   "192.168.1.216"
 #define ip2   "192.168.1.116"
 
 #define PEER_SHEET_LEN 200
