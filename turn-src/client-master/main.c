@@ -8,27 +8,30 @@
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
 #include <net/if.h>
-
+#include <pthread.h>
 
 #define ACT_NETCARD "eth0"
 //#define server_ip "58.214.236.114"
-#define server_ip "192.168.1.216"
-#define master_ip "192.168.1.216"
+#define server_ip "192.168.1.102"
+#define master_ip "192.168.1.102"
 #define UNAME "zhoujie"
 #define PASSWD "123456"
-#define server_port 61000
+#define server_port1 61000
+#define server_port2 61001
 #define master_port 1000
 
 static struct sockaddr_in server_addr, master_addr;
 static struct ifreq ifr, *pifr;
 static struct ifconf ifc;
 static char ip_info[50];
-static int sockfd;
+static int sockfd,sfd;
 static int port,sin_size;
 static char  ip[4], buff[1024];
 static char Accaunt_info[20];
+static char verify_buff[5];
 
 int local_net_init(){
+	int on,ret1;
 	memset(&master_addr, 0, sizeof(master_addr));
 	master_addr.sin_family = AF_INET;
 	master_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -38,6 +41,10 @@ int local_net_init(){
 		printf("create socket error: %s(errno: %d)\n", strerror(errno),errno);
 		return -1;
 	}
+
+
+	on = 1;			//Bind already in use
+	ret1 = setsockopt( sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on) );
 
 	if(bind(sockfd, (struct sockaddr *) (&master_addr),sizeof(master_addr)) == -1){
 		printf ("Bind error: %s\a\n", strerror (errno));
@@ -113,22 +120,58 @@ int Send_VUAP(){
 	return 0;
 }
 
+int wait_for_callback(){
+	int n;
+	
+//	pthread_detach(pthread_self());
+	if( listen(sockfd, 10) == -1){
+                printf("listen socket error: %s(errno: %d)\n",strerror(errno),errno);
+                return -1;
+        }
+
+        printf("======waiting for server's callback======\n");
+        while(1){
+                if( (sfd = accept(sockfd, (struct sockaddr*)NULL, NULL)) == -1){
+                        printf("accept socket error: %s(errno: %d)",strerror(errno),errno);
+                        return -1;
+                }
+		
+	
+                n = recv(sfd, verify_buff, 20, 0);
+                if(n == -1)
+                        printf("recv error: %s(errno: %d)",strerror(errno),errno);
+              	else{
+			verify_buff[n] = '\0';
+			printf("verify =%d\n",verify_buff[0]); 
+		}
+
+		return verify_buff[0];
+		}
+}
+
 int main(){
 	int i;
-	int ret;
+	int ret,pthread_id;
+	pthread_t recv_thread;
+
 	ret = local_net_init();
 	if(ret < 0){
 		printf("local bind fail!\n",ret);
 		return ret;
 	}
-
-	ret = get_local_ip_port();
+	
+//	ret = pthread_create(&recv_thread, NULL, wait_for_callback, NULL);
+	if(ret != 0){
+		printf("recv thread create error!\n");
+	}
+	
+	//ret = get_local_ip_port();
 	if(ret < 0){
 		printf("get local ip & port fail!\n");
 		return ret;
 	}
 
-	ret = set_server_struct(server_ip,server_port);
+	ret = set_server_struct(server_ip,server_port1);
 	if(ret < 0){
 		printf("set server ip fail!\n");
 		return ret;
@@ -142,7 +185,27 @@ int main(){
 			break;
 		}
 	}
-	
+
+	close(sockfd);
+
+	ret = local_net_init();
+	if(ret < 0){
+		printf("local bind fail!\n",ret);
+		return ret;
+	}
+
+	ret = wait_for_callback();
+	if(ret < 0){
+		printf("recv error!\n");
+		return 0;
+	}
+	else if(ret == 0){
+		printf("Verify fail!Wrong uname or passwd!\n");
+	}
+	else if(ret == 1){
+		printf("Verify success! Start to transmit data...\n");
+	}
+
 	close(sockfd);
 	return 0;
 }
