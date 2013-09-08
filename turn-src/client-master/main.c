@@ -29,6 +29,7 @@ static int port,sin_size;
 static char  ip[4], buff[1024];
 static char Accaunt_info[20];
 static char verify_buff[5];
+static int peer_ready = 0;
 
 int local_net_init(){
 	int on,ret1;
@@ -129,7 +130,7 @@ int wait_for_callback(){
                 return -1;
         }
 
-        printf("======waiting for server's callback======\n");
+//        printf("======waiting for server's callback======\n");
         while(1){
                 if( (sfd = accept(sockfd, (struct sockaddr*)NULL, NULL)) == -1){
                         printf("accept socket error: %s(errno: %d)",strerror(errno),errno);
@@ -149,10 +150,50 @@ int wait_for_callback(){
 		}
 }
 
+void * wait_for_peer(){
+	int ret1,n;
+	char peer_info[1];	
+	pthread_detach(pthread_self());
+
+	ret1 = local_net_init();
+	if(ret1 < 0){
+		printf("local bind fail!\n",ret1);
+		return ret1;
+	}
+
+	if( listen(sockfd, 10) == -1){
+                printf("listen socket error: %s(errno: %d)\n",strerror(errno),errno);
+                return -1;
+        }
+
+        printf("======waiting for server's callback======\n");
+        while(1){
+                if( (sfd = accept(sockfd, (struct sockaddr*)NULL, NULL)) == -1){
+                        printf("accept socket error: %s(errno: %d)",strerror(errno),errno);
+                        return -1;
+                }
+		
+	
+                n = recv(sfd, peer_info, 20, 0);
+                if(n == -1)
+                        printf("recv error: %s(errno: %d)",strerror(errno),errno);
+              	else{
+			peer_info[n] = '\0';
+			printf("peer_info = %d\n",peer_info[0]);
+			if(peer_info[0] == 1){ 
+				printf("Peer is ready!\n");
+				peer_ready = 1;
+			}
+		}
+
+		return;
+		}
+}
+
 int main(){
 	int i;
-	int ret,pthread_id;
-	pthread_t recv_thread;
+	int ret;
+	pthread_t pthread_wait_for_peer;
 
 	ret = local_net_init();
 	if(ret < 0){
@@ -160,7 +201,6 @@ int main(){
 		return ret;
 	}
 	
-//	ret = pthread_create(&recv_thread, NULL, wait_for_callback, NULL);
 	if(ret != 0){
 		printf("recv thread create error!\n");
 	}
@@ -188,12 +228,12 @@ int main(){
 
 	close(sockfd);
 
+	printf(".................................Wait for server's callback........................\n ");
 	ret = local_net_init();
 	if(ret < 0){
 		printf("local bind fail!\n",ret);
 		return ret;
 	}
-
 	ret = wait_for_callback();
 	if(ret < 0){
 		printf("recv error!\n");
@@ -203,9 +243,19 @@ int main(){
 		printf("Verify fail!Wrong uname or passwd!\n");
 	}
 	else if(ret == 1){
-		printf("Verify success! Start to transmit data...\n");
+		printf("Verify success!Wait for peer...\n");
 	}
 
 	close(sockfd);
+
+//	printf(".................................Wait for peer's connection........................\n ");
+//	ret = pthread_create(&pthread_wait_for_peer, NULL, wait_for_peer, NULL);
+	
+//	while(1){
+//		if(peer_ready == 1){
+//			printf("peer is ready!Start to transmit data...\n");
+//		}
+
+//	}
 	return 0;
 }
