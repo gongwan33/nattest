@@ -7,6 +7,7 @@
 #include <netdb.h>
 
 #include <JEANP2PPRO.h>
+#include <List.h>
 
 #define PORT1 61000
 #define ip1   "192.168.1.216"
@@ -27,6 +28,8 @@ static char Passwd[10];
 
 static char Peers_Login[PEER_SHEET_LEN][20];
 static int  Peers_Sheet_Index = 0;
+
+struct node_net Peer_Login[PEER_SHEET_LEN];
 
 int local_net_init(){
 	bzero(&sin, sizeof(sin));
@@ -139,6 +142,42 @@ int main(){
 					printf("Send response.\n");
 				}
 				break;
+
+			case V_UAP_S:
+				sscanf(recv_str, "%c %s %s", &Get_W, Uname, Passwd);
+				//printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
+				if(Uname == NULL){
+					printf("Error:User name is NULL!!");
+					break;
+				}
+
+				printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
+				printf("Verify result: Uname = %d Passwd = %d\n", strcmp(UNAME, Uname), strcmp(PASSWD, Passwd));
+
+				if((strcmp(UNAME, Uname) != 0) || (strcmp(PASSWD, Passwd) != 0)){
+					printf("Username or password error!!\n");
+					Send_CMD(GET_REQ, 0x5);
+					printf("Send response.\n");
+				}
+				else{
+					printf("Username and password verifying passed!!\n");
+
+					int Find_Success = 0;
+					if(Find_Peer(Uname) != 0){
+							strcpy(Peers_Login[Peers_Sheet_Index], Uname);
+							Find_Success = 1;
+							printf("Node find success!! Now index at %d\n", Peers_Sheet_Index);
+					}
+
+					if(!Find_Success)
+						Send_CMD(GET_REQ, 0x4);
+					else
+						Send_CMD(GET_REQ, 0x6);
+					printf("Send response.\n");
+				}
+				break;
+
+
 			case KEEP_CON:
 				Send_CMD(GET_REQ, 0x03);
 				printf("KEEP_CON has already responsed.\n");
