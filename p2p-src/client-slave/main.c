@@ -116,9 +116,9 @@ int set_rec_timeout(int usec, int sec){
 	setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,&tv_out, sizeof(tv_out));
 }
 
-void Send_VUAP(){
+void Send_VUAPS(){
 	char Sen_W;
-	Sen_W = V_UAP;
+	Sen_W = V_UAP_S;
 	sprintf(ip_info,"%c %s %s", Sen_W, USERNAME, PASSWD);
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
@@ -165,7 +165,7 @@ int main(){
 
 	printf("------------------- Connection and user name verifying ---------------------\n");
 	for(i = 0; i < 10; i++){
-		Send_VUAP();
+		Send_VUAPS();
 		printf("Send uname and passwd\n");
 
 		set_rec_timeout(0, 1);//(usec, sec)
@@ -173,17 +173,17 @@ int main(){
 		char result;
 		sscanf(Ctl_Rec, "%c %c", &Rec_W, &result);
 
-		if(Rec_W == V_RESP){
+		if(Rec_W == GET_REQ){
 			printf("Receive ctl_w = %d result = %d\n", Rec_W, result);
-			if(result == 1){
-				printf("Verify and regist success!\n");
+			if(result == 4){
+				printf("Verify and find node success!\n");
 				break;
 			}
-			else if(result == 3){
-				printf("Verify success but regist failed. Maybe node already exists!\n");
-				break;
+			else if(result == 6){
+				printf("Verify success but find node failed. Maybe node not exists!\n");
+				return NO_NODE;
 			}
-			else if(result == 2){ 
+			else if(result == 5){ 
 				printf("Verify failed!\n");
 				return WRONG_VERIFY;
 			}
@@ -196,7 +196,7 @@ int main(){
 	if (ret != 0)
 		printf("can't create thread: %s\n", strerror(ret));
 
-	printf("------------------ Wait for slave to establish connection!-------------------\n");
+	printf("------------------ Establish connection!-------------------\n");
 
 
 	

@@ -163,12 +163,13 @@ int main(){
 		return ret;
 	}
 
+	set_rec_timeout(0, 1);//(usec, sec)
+
 	printf("------------------- Connection and user name verifying ---------------------\n");
 	for(i = 0; i < 10; i++){
 		Send_VUAP();
 		printf("Send uname and passwd\n");
 
-		set_rec_timeout(0, 1);//(usec, sec)
 		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		char result;
 		sscanf(Ctl_Rec, "%c %c", &Rec_W, &result);
@@ -213,7 +214,6 @@ int main(){
 	   usleep(1000000);
 	   }
 	   */
-	while(1);
 	close(sockfd);
 	return 0;
 }
