@@ -8,6 +8,7 @@
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
 #include <net/if.h>
+#include <pthread.h>
 #include <JEANP2PPRO.h>
 
 #define server_ip_1 "192.168.1.216"
@@ -27,6 +28,7 @@ static char ip_info[50];
 static int sockfd;
 static int port, sin_size, recv_sin_len;
 static char mac[6], ip[4], buff[1024];
+static pthread_t keep_connection;
 
 
 int local_net_init(){
@@ -121,6 +123,22 @@ void Send_VUAP(){
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
 
+void Send_CMD(char Ctls, char Res){
+	char Sen_W;
+	Sen_W = Ctls;
+	sprintf(ip_info,"%c %c ", Sen_W, Res);
+	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+}
+
+void *Keep_con(){
+	pthread_detach(pthread_self());
+	while(1){
+		Send_CMD(KEEP_CON, 0x01);
+		printf("Send KEEP_CON!\n");
+		sleep(10);
+	}
+}
+
 int main(){
 	int  i;
 	char Ctl_Rec[50];
@@ -165,7 +183,7 @@ int main(){
 				printf("Verify success but regist failed. Maybe node already exists!\n");
 				break;
 			}
-			else{ 
+			else if(result == 2){ 
 				printf("Verify failed!\n");
 				return WRONG_VERIFY;
 			}
@@ -173,8 +191,14 @@ int main(){
 	}
 
 	if(i >= 10) return OUT_TRY;
+	
+	ret = pthread_create(&keep_connection, NULL, Keep_con, NULL);
+	if (ret != 0)
+		printf("can't create thread: %s\n", strerror(ret));
 
 	printf("------------------ Wait for slave to establish connection!-------------------\n");
+
+
 	
 	/*
 	   for(j = 0; j < 10; j++){
@@ -189,8 +213,7 @@ int main(){
 	   usleep(1000000);
 	   }
 	   */
-
+	while(1);
 	close(sockfd);
-	exit(0);	
 	return 0;
 }

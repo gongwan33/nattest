@@ -139,6 +139,10 @@ int main(){
 					printf("Send response.\n");
 				}
 				break;
+			case KEEP_CON:
+				Send_CMD(GET_REQ, 0x03);
+				printf("KEEP_CON has already responsed.\n");
+				break;
 
 
 		}
