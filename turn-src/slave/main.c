@@ -18,7 +18,8 @@
 #define PASSWD "123456"
 #define server_port1 61000
 #define server_port2 61001
-#define master_port 1000
+#define server_port3 61002
+#define slave_port 2000
 
 static struct sockaddr_in server_addr, master_addr;
 static struct ifreq ifr, *pifr;
@@ -36,7 +37,7 @@ int local_net_init(){
 	memset(&master_addr, 0, sizeof(master_addr));
 	master_addr.sin_family = AF_INET;
 	master_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	master_addr.sin_port = htons(master_port);
+	master_addr.sin_port = htons(slave_port);
 
 	if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
 		printf("create socket error: %s(errno: %d)\n", strerror(errno),errno);
@@ -107,6 +108,8 @@ int set_server_struct(char * ip1, int port){
 }
 
 int Send_VUAP(){
+	int n;
+
 	sprintf(Accaunt_info,"%s,%s",UNAME,PASSWD);
 	printf("info = %s\n",Accaunt_info);
 	if( connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
@@ -118,53 +121,46 @@ int Send_VUAP(){
 		printf("send msg error: %s(errno: %d)\n", strerror(errno), errno);
 		return -1;
 	}
+
+	;
+
 	return 0;
 }
 
 int wait_for_callback(){
 	int n;
 
-	//	pthread_detach(pthread_self());
-
-
 	n = recv(sockfd, verify_buff, 20, 0);
-	if(n == -1)
+	if(n == -1){
 		printf("recv error: %s(errno: %d)",strerror(errno),errno);
-	else{
-		verify_buff[n] = '\0';
-		printf("verify =%d\n",verify_buff[0]); 
+		return -1;
 	}
-
-	return verify_buff[0];
-}
-
-void * wait_for_peer(){
-	int ret1,n;
-	char peer_info[20];	
-
-
-
-	n = recv(sockfd, peer_info, 20, 0);
 	printf("n = %d\n",n);
-	if(n == -1)
-		printf("recv error: %s(errno: %d)",strerror(errno),errno);
-	else{
-		peer_info[n] = '\0';
-		printf("peer_info = %d\n",peer_info[0]);
-		if(peer_info[0] == 1){ 
-			printf("Peer is ready!\n");
-			peer_ready = 1;
+	if(n == 2){
+		printf("n = %d\n",n);
+		if(verify_buff[0] == 1){
+			printf("Verify success!\n");
+			if(verify_buff[1] == 1){
+				printf("Master is ready!\n");
+				return 1;
+			}
+			else{
+				printf("Master is not connectted!\n");
+				return 0;
+			}
+		}
+		else{
+			printf("Verify fail!\n");
+			return 0;
 		}
 	}
-
-	return;
+	return 0;
 }
+
 
 int main(){
 	int i;
 	int ret;
-	void * status;
-
 	pthread_t pthread_wait_for_peer;
 
 	ret = local_net_init();
@@ -172,18 +168,8 @@ int main(){
 		printf("local bind fail!\n",ret);
 		return ret;
 	}
-	
-	if(ret != 0){
-		printf("recv thread create error!\n");
-	}
-	
-	//ret = get_local_ip_port();
-	if(ret < 0){
-		printf("get local ip & port fail!\n");
-		return ret;
-	}
 
-	ret = set_server_struct(server_ip,server_port1);
+	ret = set_server_struct(server_ip,server_port3);
 	if(ret < 0){
 		printf("set server ip fail!\n");
 		return ret;
@@ -200,39 +186,13 @@ int main(){
 
 
 	printf(".................................Wait for server's callback........................\n ");
-
 	ret = wait_for_callback();
-	if(ret < 0){
-		printf("recv error!\n");
-		return 0;
-	}
-	else if(ret == 0){
-		printf("Verify fail!Wrong uname or passwd!\n");
-	}
-	else if(ret == 1){
-		printf("Verify success!Wait for peer...\n");
-		pthread_create(&pthread_wait_for_peer, NULL, wait_for_peer, NULL);
+	if(ret == 1){
+		printf("Verify success!Start to transmit...\n");
 	}
 
-	while(1){
-		if(peer_ready == 1){
-			printf("peer is ready,start tramsmit...\n");
-			return 0;
-		}
-		else
-			sleep(1);
-	}
-	pthread_join(pthread_wait_for_peer,status);
 	close(sockfd);
 
-//	printf(".................................Wait for peer's connection........................\n ");
-//	ret = pthread_create(&pthread_wait_for_peer, NULL, wait_for_peer, NULL);
-	
-//	while(1){
-//		if(peer_ready == 1){
-//			printf("peer is ready!Start to transmit data...\n");
-//		}
 
-//	}
 	return 0;
 }
