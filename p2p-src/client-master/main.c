@@ -21,7 +21,7 @@
 #define server_port 61000
 #define local_port 6888
 
-static struct sockaddr_in servaddr1, servaddr2, local_addr, recv_sin;
+static struct sockaddr_in servaddr1, local_addr, recv_sin, slave_sin;
 static struct ifreq ifr, *pifr;
 static struct ifconf ifc;
 static char ip_info[50];
@@ -108,7 +108,7 @@ int set_ip1_struct(char * ip1, int port){
 	return 0;
 }
 
-int set_rec_timeout(int usec, int sec){
+void set_rec_timeout(int usec, int sec){
 	struct timeval tv_out;
     tv_out.tv_sec = sec;
     tv_out.tv_usec = usec;
@@ -126,7 +126,7 @@ void Send_VUAP(){
 void Send_CMD(char Ctls, char Res){
 	char Sen_W;
 	Sen_W = Ctls;
-	sprintf(ip_info,"%c %c ", Sen_W, Res);
+	sprintf(ip_info,"%c %c", Sen_W, Res);
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
 
@@ -199,6 +199,21 @@ int main(){
 
 	printf("------------------ Wait for slave to establish connection!-------------------\n");
 
+	int slaver_act = 0;
+	while(!slaver_act){
+		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		Rec_W = Ctl_Rec[0];
+
+		if(Rec_W == S_IP){
+			slaver_act = 1;
+			memset(&slave_sin, 0, sizeof(slave_sin));
+			memcpy(&slave_sin, Ctl_Rec + 1, sizeof(struct sockaddr_in));
+			printf("Get slave IP info! Slave IP is %s\n", inet_ntoa(slave_sin.sin_addr));
+
+			Send_CMD(GET_REQ, 0x08);
+
+		}
+	}
 
 	
 	/*

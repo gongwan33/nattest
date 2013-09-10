@@ -9,6 +9,7 @@
 #include <JEANP2PPRO.h>
 #include <List.h>
 
+#define MAX_TRY 10
 #define PORT1 61000
 #define ip1   "192.168.1.216"
 #define ip2   "192.168.1.116"
@@ -29,8 +30,7 @@ static char Uname[10];
 static char Passwd[10];
 
 static int  Peers_Sheet_Index = 0;
-
-struct node_net *Peer_Login;
+static struct node_net *Peer_Login;
 
 int local_net_init(){
 	bzero(&sin, sizeof(sin));
@@ -62,6 +62,14 @@ void init_recv_sin(){
 	recv_sin_len = sizeof(recv_sin);
 }
 
+void set_rec_timeout(int usec, int sec){
+	struct timeval tv_out;
+    tv_out.tv_sec = sec;
+    tv_out.tv_usec = usec;
+
+	setsockopt(sfd,SOL_SOCKET,SO_RCVTIMEO,&tv_out, sizeof(tv_out));
+}
+
 struct node_net * Find_Peer(char * user){
 	return find_item(user);
 }
@@ -75,20 +83,44 @@ void Send_CMD(char Ctl, char res){
 	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)&recv_sin, recv_sin_len);
 }
 
-int Peer_Login_init(){
+int Send_S_IP(char * name){
+	char RESP[50];
+	char GET_W;
+	char res;
+	struct node_net * tmp_node;
+	int i;
+	tmp_node = find_item(name);
+	if(tmp_node == NULL) return -1;
+
+	RESP[0] = S_IP;
+	memcpy(RESP + 1, tmp_node->recv_sin_s, sizeof(struct sockaddr_in));
+	
+	set_rec_timeout(0, 1);	
+	for(i = 0; i < MAX_TRY; i++){
+		sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)tmp_node->recv_sin_m, recv_sin_len);
+		printf("Send slave ip to master!%s\n", inet_ntoa(tmp_node->recv_sin_s->sin_addr));
+		recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		sscanf(recv_str, "%c %c", &GET_W, &res);
+		if(GET_W == GET_REQ && res == 0x08) break;
+	}
+	set_rec_timeout(0, 0);	
+}
+
+int Peer_Login_Init(){
 	Peer_Login = (struct node_net *)malloc(sizeof(struct node_net));
 	if(Peer_Login == NULL) return -1;
 	Peer_Login->Uname = (char *)malloc(10);
 	Peer_Login->Passwd = (char *)malloc(10);
 	Peer_Login->sin_len = sizeof(struct sockaddr_in);
 	Peer_Login->recv_sin_s = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+	Peer_Login->recv_sin_m = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
 
-	if(Peer_Login->Uname && Peer_Login->Passwd && Peer_Login->sin_len && Peer_Login->recv_sin_s) return 0;
+	if(Peer_Login->Uname && Peer_Login->Passwd && Peer_Login->sin_len && Peer_Login->recv_sin_s && Peer_Login->recv_sin_m) return 0;
 	else return -1;
 }
 
-int Peer_set(char * name, char * passwd, struct sockaddr_in * r){
-	int ret = Peer_Login_init();
+int Peer_Set(char * name, char * passwd, struct sockaddr_in * r){
+	int ret = Peer_Login_Init();
 	if(ret < 0){
 		printf("Malloc failed when init Peer login sheet!!\n");
 		return INIT_PEER_LOGIN_FAIL;
@@ -96,11 +128,20 @@ int Peer_set(char * name, char * passwd, struct sockaddr_in * r){
 
 	strcpy(Peer_Login->Uname, name);
 	strcpy(Peer_Login->Passwd, passwd);
-	memcpy(Peer_Login->recv_sin_s, r, sizeof(r));
+	memcpy(Peer_Login->recv_sin_m, r, sizeof(r));
 	
 	add_item(Peer_Login);
 
 	return 0;
+}
+
+int Peer_Set_Slave(char * name, struct sockaddr_in * r){
+	struct node_net *tmp_node = find_item(name);
+	if(tmp_node != NULL){
+		memcpy(tmp_node->recv_sin_s, r, sizeof(struct sockaddr_in));
+		return 0;
+	}
+	return -1;
 }
 
 int main(){
@@ -148,7 +189,7 @@ int main(){
 					int Insert_Success = 0;
 					if(Find_Peer(Uname) == 0){
 						if(Peers_Sheet_Index < PEER_SHEET_LEN){
-							ret = Peer_set(Uname, Passwd, &recv_sin);
+							ret = Peer_Set(Uname, Passwd, &recv_sin);
 							if(ret < 0){
 								printf("Set peer failed!\n");
 								return ret;
@@ -197,11 +238,21 @@ int main(){
 							printf("Node find success!! Now index at %d\n", Peers_Sheet_Index);
 					}
 
-					if(!Find_Success)
+					if(!Find_Success){
 						Send_CMD(GET_REQ, 0x4);
-					else
+						printf("Send response.\n");
+						ret = Peer_Set_Slave(Uname, &recv_sin);
+						if(ret < 0){
+							printf("Login sheet is broken!\n");
+							return LOGIN_SHEET_BROKEN;
+						}
+							
+						Send_S_IP(Uname);
+					}
+					else{
 						Send_CMD(GET_REQ, 0x6);
-					printf("Send response.\n");
+						printf("Send response.\n");
+					}
 				}
 				break;
 
@@ -215,6 +266,7 @@ int main(){
 		}
 	}
 
+	empty_item();
 	close(sfd);
 	return 0;
 }

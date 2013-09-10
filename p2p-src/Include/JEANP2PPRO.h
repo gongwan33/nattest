@@ -5,6 +5,8 @@
 #define GET_REQ		0x04
 #define KEEP_CON	0x05
 #define V_UAP_S		0x06
+#define REQ_M_IP	0x07
+#define S_IP		0x08
 
 //-----------------------------ERROR RETURN-------------------------------
 #define WRONG_VERIFY			-50
@@ -12,3 +14,4 @@
 #define OUT_TRY					-52
 #define NO_NODE					-53
 #define INIT_PEER_LOGIN_FAIL	-54
+#define LOGIN_SHEET_BROKEN		-55

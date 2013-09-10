@@ -45,6 +45,7 @@ struct list_head {
 struct node_net{
 	char * Uname;
 	char * Passwd;
+	struct sockaddr_in * recv_sin_m;
 	struct sockaddr_in * recv_sin_s;
 	int sin_len;
 	
@@ -108,8 +109,8 @@ struct node_net *node;
 struct node_net * find_item(char *name){
 	list_for_each(plist, &head){
 		node = list_entry(plist, struct node_net, list);
-		printf("%s\n",node->Uname);
-		printf("%d\n",node->sin_len);
+	//	printf("%s\n",node->Uname);
+	//	printf("%d\n",node->sin_len);
 		if(strcmp(node->Uname, name) == 0) return node;
 	}
 

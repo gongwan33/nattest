@@ -19,7 +19,7 @@
 
 #define ACT_NETCARD "eth0"
 #define server_port 61000
-#define local_port 6888
+#define local_port 6788
 
 static struct sockaddr_in servaddr1, servaddr2, local_addr, recv_sin;
 static struct ifreq ifr, *pifr;
