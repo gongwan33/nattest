@@ -100,8 +100,12 @@ int Send_S_IP(char * name){
 		sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)tmp_node->recv_sin_m, recv_sin_len);
 		printf("Send slave ip to master!%s\n", inet_ntoa(tmp_node->recv_sin_s->sin_addr));
 		recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-		sscanf(recv_str, "%c %c", &GET_W, &res);
-		if(GET_W == GET_REQ && res == 0x08) break;
+		GET_W = recv_str[0];
+		res = recv_str[2];
+		if(GET_W == GET_REQ && res == 0x08){
+			Send_CMD(GET_REQ, 0x09);
+		   	break;
+		}
 	}
 	set_rec_timeout(0, 0);	
 }
@@ -147,6 +151,7 @@ int Peer_Set_Slave(char * name, struct sockaddr_in * r){
 int main(){
 	int ret = 0;
 	char Get_W;
+	char res;
 	
 	init_list();
 	
@@ -260,6 +265,15 @@ int main(){
 			case KEEP_CON:
 				Send_CMD(GET_REQ, 0x03);
 				printf("KEEP_CON has already responsed.\n");
+				break;
+
+			case GET_REQ:
+				Get_W = recv_str[0];
+				res = recv_str[2];
+				if(res == 0x08){
+					Send_CMD(GET_REQ, 0x9);
+					printf("IP confirm pack has already responsed.\n");
+				}
 				break;
 
 

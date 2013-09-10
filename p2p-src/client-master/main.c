@@ -11,6 +11,8 @@
 #include <pthread.h>
 #include <JEANP2PPRO.h>
 
+#define MAX_TRY 10
+
 #define server_ip_1 "192.168.1.216"
 #define server_ip_2 "192.168.1.116"
 
@@ -166,13 +168,14 @@ int main(){
 	set_rec_timeout(0, 1);//(usec, sec)
 
 	printf("------------------- Connection and user name verifying ---------------------\n");
-	for(i = 0; i < 10; i++){
+	for(i = 0; i < MAX_TRY; i++){
 		Send_VUAP();
 		printf("Send uname and passwd\n");
 
 		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		char result;
-		sscanf(Ctl_Rec, "%c %c", &Rec_W, &result);
+		Rec_W = Ctl_Rec[0];
+		result = Ctl_Rec[2];
 
 		if(Rec_W == V_RESP){
 			printf("Receive ctl_w = %d result = %d\n", Rec_W, result);
@@ -191,7 +194,7 @@ int main(){
 		}
 	}
 
-	if(i >= 10) return OUT_TRY;
+	if(i >= MAX_TRY) return OUT_TRY;
 	
 	ret = pthread_create(&keep_connection, NULL, Keep_con, NULL);
 	if (ret != 0)
@@ -210,7 +213,17 @@ int main(){
 			memcpy(&slave_sin, Ctl_Rec + 1, sizeof(struct sockaddr_in));
 			printf("Get slave IP info! Slave IP is %s\n", inet_ntoa(slave_sin.sin_addr));
 
-			Send_CMD(GET_REQ, 0x08);
+			for(i = 0; i < MAX_TRY + 1 ; i++){
+				Send_CMD(GET_REQ, 0x08);
+				char result = 0;
+
+				recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+				Rec_W = Ctl_Rec[0];
+				result = Ctl_Rec[2];
+				if(Rec_W == GET_REQ && result == 0x9) break;
+			}
+
+			if(i >= MAX_TRY + 1) return OUT_TRY;
 
 		}
 	}
