@@ -28,10 +28,9 @@ static int port = PORT1;
 static char Uname[10];
 static char Passwd[10];
 
-static char Peers_Login[PEER_SHEET_LEN][20];
 static int  Peers_Sheet_Index = 0;
 
-struct node_net Peer_Login;
+struct node_net *Peer_Login;
 
 int local_net_init(){
 	bzero(&sin, sizeof(sin));
@@ -63,15 +62,8 @@ void init_recv_sin(){
 	recv_sin_len = sizeof(recv_sin);
 }
 
-int Find_Peer(char * user){
-	int index = 0;
-
-	for(index = 0; index <= Peers_Sheet_Index; index++){
-		if(!strcmp(Peers_Login[index], user))
-			return 0;
-	}
-
-	return -1;
+struct node_net * Find_Peer(char * user){
+	return find_item(user);
 }
 
 void Send_CMD(char Ctl, char res){
@@ -84,13 +76,31 @@ void Send_CMD(char Ctl, char res){
 }
 
 int Peer_Login_init(){
-	Peer_Login.Uname = (char *)malloc(10);
-	Peer_Login.Passwd = (char *)malloc(10);
-	Peer_Login.sin_len = sizeof(struct sockaddr_in);
-	Peer_Login.recv_sin_s = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+	Peer_Login = (struct node_net *)malloc(sizeof(struct node_net));
+	if(Peer_Login == NULL) return -1;
+	Peer_Login->Uname = (char *)malloc(10);
+	Peer_Login->Passwd = (char *)malloc(10);
+	Peer_Login->sin_len = sizeof(struct sockaddr_in);
+	Peer_Login->recv_sin_s = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
 
-	if(Peer_Login.Uname && Peer_Login.Passwd && Peer_Login.sin_len && Peer_Login.recv_sin_s) return 0;
+	if(Peer_Login->Uname && Peer_Login->Passwd && Peer_Login->sin_len && Peer_Login->recv_sin_s) return 0;
 	else return -1;
+}
+
+int Peer_set(char * name, char * passwd, struct sockaddr_in * r){
+	int ret = Peer_Login_init();
+	if(ret < 0){
+		printf("Malloc failed when init Peer login sheet!!\n");
+		return INIT_PEER_LOGIN_FAIL;
+	}
+
+	strcpy(Peer_Login->Uname, name);
+	strcpy(Peer_Login->Passwd, passwd);
+	memcpy(Peer_Login->recv_sin_s, r, sizeof(r));
+	
+	add_item(Peer_Login);
+
+	return 0;
 }
 
 int main(){
@@ -98,8 +108,7 @@ int main(){
 	char Get_W;
 	
 	init_list();
-	Peer_Login_init();
-
+	
 	ret = local_net_init();
 	if(ret < 0){
 		printf("local net init failed!!\n");
@@ -137,9 +146,14 @@ int main(){
 					printf("Username and password verifying passed!!\n");
 
 					int Insert_Success = 0;
-					if(Find_Peer(Uname) != 0){
+					if(Find_Peer(Uname) == 0){
 						if(Peers_Sheet_Index < PEER_SHEET_LEN){
-							strcpy(Peers_Login[Peers_Sheet_Index], Uname);
+							ret = Peer_set(Uname, Passwd, &recv_sin);
+							if(ret < 0){
+								printf("Set peer failed!\n");
+								return ret;
+							}
+
 							Peers_Sheet_Index++;
 							Insert_Success = 1;
 							printf("Registor success!! Now index at %d\n", Peers_Sheet_Index);
@@ -178,8 +192,7 @@ int main(){
 					printf("Username and password verifying passed!!\n");
 
 					int Find_Success = 0;
-					if(Find_Peer(Uname) != 0){
-							strcpy(Peers_Login[Peers_Sheet_Index], Uname);
+					if(Find_Peer(Uname) == 0){
 							Find_Success = 1;
 							printf("Node find success!! Now index at %d\n", Peers_Sheet_Index);
 					}
@@ -203,6 +216,5 @@ int main(){
 	}
 
 	close(sfd);
-
 	return 0;
 }

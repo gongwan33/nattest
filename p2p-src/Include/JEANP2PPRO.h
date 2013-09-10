@@ -7,7 +7,8 @@
 #define V_UAP_S		0x06
 
 //-----------------------------ERROR RETURN-------------------------------
-#define WRONG_VERIFY	-50
-#define WRONG_REG		-51
-#define OUT_TRY			-52
-#define NO_NODE			-53
+#define WRONG_VERIFY			-50
+#define WRONG_REG				-51
+#define OUT_TRY					-52
+#define NO_NODE					-53
+#define INIT_PEER_LOGIN_FAIL	-54

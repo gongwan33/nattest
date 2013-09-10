@@ -93,35 +93,38 @@ static inline int list_empty(const struct list_head *head)
 }
 
 
-static struct list_head head, *plist;
-struct node_net *node;
-char * t_name;
+struct list_head head, *plist;
 
 void init_list(){
 	INIT_LIST_HEAD(&head);
-	t_name = (char *)malloc(10);
 }
 
-void add_item(struct node_net item){
-	list_add(&item.list, &head);
+void add_item(struct node_net *item){
+	list_add(&(item->list), &head);
 }
 
-struct node_net * find_item(){
+struct node_net *node;
+
+struct node_net * find_item(char *name){
 	list_for_each(plist, &head){
 		node = list_entry(plist, struct node_net, list);
 		printf("%s\n",node->Uname);
 		printf("%d\n",node->sin_len);
-		if(strcmp(node->Uname, t_name) == 0) return node;
+		if(strcmp(node->Uname, name) == 0) return node;
 	}
 
 	return NULL;
 }
 
-int del_item(){
+int del_item(char *name){
 	list_for_each(plist, &head){
     struct node_net *tmp_node = list_entry(plist, struct node_net, list);
-		if(strcmp(tmp_node->Uname, t_name) ==0){
+		if(strcmp(tmp_node->Uname, name) ==0){
 		   	list_del(&tmp_node->list);
+			free(tmp_node->Uname);
+			free(tmp_node->Passwd);
+			free(tmp_node->recv_sin_s);
+			free(tmp_node);
 			return 0;
 		}
 	}
@@ -130,6 +133,14 @@ int del_item(){
 }
 
 int empty_item(){
+	list_for_each(plist, &head){
+    struct node_net *tmp_node = list_entry(plist, struct node_net, list);
+		   	list_del(&tmp_node->list);
+			free(tmp_node->Uname);
+			free(tmp_node->Passwd);
+			free(tmp_node->recv_sin_s);
+			free(tmp_node);
+	}
 	return list_empty(&head);
 }
 #endif
