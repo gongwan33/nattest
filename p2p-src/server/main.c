@@ -17,6 +17,8 @@
 #define UNAME "wang"
 #define PASSWD "123456"
 
+extern char * t_name;
+
 static char pathname[50] = "./natinfo.log";
 static int sfd;
 static struct sockaddr_in sin, recv_sin;	
@@ -29,7 +31,7 @@ static char Passwd[10];
 static char Peers_Login[PEER_SHEET_LEN][20];
 static int  Peers_Sheet_Index = 0;
 
-struct node_net Peer_Login[PEER_SHEET_LEN];
+struct node_net Peer_Login;
 
 int local_net_init(){
 	bzero(&sin, sizeof(sin));
@@ -81,9 +83,22 @@ void Send_CMD(char Ctl, char res){
 	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)&recv_sin, recv_sin_len);
 }
 
+int Peer_Login_init(){
+	Peer_Login.Uname = (char *)malloc(10);
+	Peer_Login.Passwd = (char *)malloc(10);
+	Peer_Login.sin_len = sizeof(struct sockaddr_in);
+	Peer_Login.recv_sin_s = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+
+	if(Peer_Login.Uname && Peer_Login.Passwd && Peer_Login.sin_len && Peer_Login.recv_sin_s) return 0;
+	else return -1;
+}
+
 int main(){
 	int ret = 0;
 	char Get_W;
+	
+	init_list();
+	Peer_Login_init();
 
 	ret = local_net_init();
 	if(ret < 0){
