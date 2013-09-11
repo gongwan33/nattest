@@ -13,7 +13,7 @@
 
 #define MAX_TRY 10
 
-#define server_ip_1 "192.168.1.4"
+#define server_ip_1 "192.168.1.216"
 #define server_ip_2 "192.168.1.116"
 
 #define USERNAME "wang"
@@ -147,16 +147,14 @@ void Send_POL(char req,struct sockaddr_in * sock){
 }
 
 void Send_CMD(char Ctls, char Res){
-	char Sen_W;
-	Sen_W = Ctls;
-	sprintf(ip_info,"%c %c", Sen_W, Res);
+	ip_info[0] = Ctls;
+	ip_info[1] = Res;
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
 
 void Send_CMD_TO_SLAVE(char Ctls, char Res){
-	char Sen_W;
-	Sen_W = Ctls;
-	sprintf(ip_info,"%c %c", Sen_W, Res);
+	ip_info[0] = Ctls;
+	ip_info[1] = Res;
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
 }
 
@@ -167,6 +165,17 @@ void *Keep_con(){
 		printf("Send KEEP_CON!\n");
 		sleep(10);
 	}
+}
+
+void clean_rec_buff(){
+	char tmp[50];
+	int ret;
+	set_rec_timeout(100000, 0);//(usec, sec)
+	while(ret > 0){
+		ret = recvfrom(sockfd, tmp, 10, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		printf("Clean recv buff %d.\n", ret);
+	}
+	set_rec_timeout(0, 1);//(usec, sec)
 }
 
 int main(){
@@ -202,10 +211,9 @@ int main(){
 
 		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		char result;
-		Rec_W = Ctl_Rec[0];
-		result = Ctl_Rec[2];
+		result = Ctl_Rec[1];
 
-		if(Rec_W == V_RESP){
+		if(Ctl_Rec[0] == V_RESP){
 			printf("Receive ctl_w = %d result = %d\n", Rec_W, result);
 			if(result == 1){
 				printf("Verify and regist success!\n");
@@ -228,7 +236,7 @@ int main(){
 	if (ret != 0)
 		printf("can't create thread: %s\n", strerror(ret));
 
-
+	clean_rec_buff();
 	printf("------------------ Wait for slave IP!-------------------\n");
 
 	int slaver_act = 0;
@@ -247,9 +255,7 @@ int main(){
 				char result = 0;
 
 				recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-				Rec_W = Ctl_Rec[0];
-				result = Ctl_Rec[2];
-				if(Rec_W == GET_REQ && result == 0x9) break;
+				if(Ctl_Rec[0] == GET_REQ && Ctl_Rec[1] == 0x9) break;
 			}
 
 			if(i >= MAX_TRY + 1) return OUT_TRY;
@@ -257,7 +263,7 @@ int main(){
 		}
 	}
 
-	
+	clean_rec_buff();
 	printf("------------------ Wait for slave to establish connection!-------------------\n");
 	while(1){
 		memset(Ctl_Rec, 0, 50);
@@ -275,15 +281,15 @@ int main(){
 			Send_CMD(GET_REQ, 0x12);
 			printf("Get M_POL_REQ from server.\n");
 			for(i = 0; i < MAX_TRY; i++){
+				memset(Ctl_Rec, 0, 50);
 				Send_POL(POL_REQ, &slave_sin);
 				printf("Send POL_REQ to slave.\n");
 				recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-				if(Ctl_Rec[0] == GET_REQ && Ctl_Rec[2] == 0x0a){
+				if(Ctl_Rec[0] == GET_REQ && Ctl_Rec[1] == 0x0a){
 					printf("Pole ok! Connection established.\n");
 					Send_CMD(GET_REQ, 0x0e);
 					break;
 				}
-				sleep(1);
 			}
 			if(i >= MAX_TRY){
 				Send_CMD(GET_REQ, 0x0f);
@@ -296,19 +302,6 @@ int main(){
 
 
 	}
-	/*
-	   for(j = 0; j < 10; j++){
-
-	   sprintf(ip_info,"#1 %s [%d]", inet_ntoa(*(struct in_addr *)ip), port);
-	   printf("send %s\n", ip_info);
-
-	   for(i = 0; i < count; i++){
-	   sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1,sizeof(servaddr1)); 
-	   }
-
-	   usleep(1000000);
-	   }
-	   */
 	close(sockfd);
 	return 0;
 }

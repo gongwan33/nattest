@@ -74,11 +74,9 @@ struct node_net * Find_Peer(char * user){
 }
 
 void Send_CMD(char Ctl, char res){
-	char Ctl_W;
 	char RESP[50];
-	char RESP_res = res;
-	Ctl_W = Ctl; 
-	sprintf(RESP, "%c %c", Ctl_W, RESP_res);
+	RESP[0]	= Ctl;
+	RESP[1] = res;
 	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)&recv_sin, recv_sin_len);
 }
 
@@ -89,7 +87,7 @@ int Send_CMD_TO_SLAVE(char Ctl, char * name){
 	if(tmp_node == NULL) return -1;
 	
 	RESP[0] = Ctl;
-	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)&tmp_node->recv_sin_s, sizeof(struct sockaddr_in));
+	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)tmp_node->recv_sin_s, sizeof(struct sockaddr_in));
 
 	return 0;
 }
@@ -111,9 +109,7 @@ int Send_S_IP(char * name){
 		sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)tmp_node->recv_sin_m, recv_sin_len);
 		printf("Send slave ip to master!%s\n", inet_ntoa(tmp_node->recv_sin_s->sin_addr));
 		recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-		GET_W = recv_str[0];
-		res = recv_str[2];
-		if(GET_W == GET_REQ && res == 0x08){
+		if(recv_str[0] == GET_REQ && recv_str[1] == 0x08){
 			Send_CMD(GET_REQ, 0x09);
 		   	break;
 		}
@@ -193,6 +189,17 @@ int Peer_Set_Slave(char * name, struct sockaddr_in * r, struct sockaddr_in * l){
 	return -1;
 }
 
+void clean_rec_buff(){
+	char tmp[50];
+	int ret;
+	set_rec_timeout(100000, 0);//(usec, sec)
+	while(ret > 0){
+		ret = recvfrom(sfd, tmp, 10, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		printf("Clean recv buff %d.\n", ret);
+	}
+	set_rec_timeout(0, 1);//(usec, sec)
+}
+
 int main(){
 	int ret = 0;
 	char Get_W;
@@ -212,7 +219,8 @@ int main(){
 	printf("------------------- Welcome to JEAN P2P SYSTEM ---------------------\n");
 
 	while(1){	
-
+		set_rec_timeout(0, 0);//(usec, sec)
+		memset(recv_str, 0, 50);
 		recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		Get_W = recv_str[0];
 		printf("OPCODE = %d\n", Get_W);
@@ -347,7 +355,7 @@ int main(){
 				break;
 
 			case GET_REQ:
-				if(recv_str[2] == 0x08){
+				if(recv_str[1] == 0x08){
 					Send_CMD(GET_REQ, 0x9);
 					printf("IP confirm pack has already responsed.\n");
 				}
@@ -359,45 +367,60 @@ int main(){
 
 				Send_CMD(GET_REQ, 0xb);
 				printf("Get POL_SENT.\n");
+
+				clean_rec_buff();
 				int i = 0;
 				int master_mode = 1;
 				int cmd_sent = 0;
+				set_rec_timeout(0, 10);//(usec, sec)
 				for(i = 0; i < MAX_TRY; i++){
-					if(!cmd_sent) Send_M_POL_REQ(Uname);
-					printf("Master connecting slave...\n");
+					memset(recv_str, 0, 50);
+					if(!cmd_sent){
+						ret = Send_M_POL_REQ(Uname);
+						if(ret < 0) printf(" Username connect failed.\n");
+						printf("Master connecting slave...\n");
+					}
 					recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-					if(recv_str[0] == GET_REQ && recv_str[2] == 0x0e){
+					if(recv_str[0] == GET_REQ && recv_str[1] == 0x0e){
 						printf("Pole ok! Connection established.\n");
 						break;
 					}
-					else if(recv_str[0] == GET_REQ && recv_str[2] == 0x0f){
+					else if(recv_str[0] == GET_REQ && recv_str[1] == 0x0f){
 						printf("Pole failed! Change to slave mode.\n");
 						master_mode = 0;
 						break;
 					}
-					else if(recv_str[0] == GET_REQ && recv_str[2] == 0x12)
+					else if(recv_str[0] == GET_REQ && recv_str[1] == 0x12)
 						cmd_sent = 1;
-					sleep(5);
 				}
 
+				if(i >= MAX_TRY){
+						printf("Pole failed! Change to slave mode.\n");
+						master_mode = 0;
+				}
+				
+				clean_rec_buff();
 				cmd_sent = 0;
 				if(master_mode == 0){
 					for(i = 0; i < MAX_TRY; i++){
-						if(!cmd_sent) Send_CMD_TO_SLAVE(S_POL_REQ, Uname);
-						printf("Slave connecting master...\n");
+						memset(recv_str, 0, 50);
+						if(!cmd_sent){
+							ret = Send_CMD_TO_SLAVE(S_POL_REQ ,Uname);
+							if(ret < 0) printf(" Username connect failed.\n");
+							printf("Slave connecting master...\n");
+						}
 
 						recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-						if(recv_str[0] == GET_REQ && recv_str[2] == 0x10){
+						if(recv_str[0] == GET_REQ && recv_str[1] == 0x10){
 							printf("Pole ok! Connection established.\n");
 							break;
 						}
-						else if(recv_str[0] == GET_REQ && recv_str[2] == 0x11){
+						else if(recv_str[0] == GET_REQ && recv_str[1] == 0x11){
 							printf("Pole failed!\n");
 							break;
 						}
-						else if(recv_str[0] == GET_REQ && recv_str[2] == 0x13)
+						else if(recv_str[0] == GET_REQ && recv_str[1] == 0x13)
 							cmd_sent = 1;
-						sleep(5);
 					}
 				}
 

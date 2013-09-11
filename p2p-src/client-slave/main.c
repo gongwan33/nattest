@@ -11,8 +11,9 @@
 #include <pthread.h>
 #include <JEANP2PPRO.h>
 
+#define KEEP_CONNECT_PACK 0
 #define MAX_TRY 10
-#define server_ip_1 "192.168.1.4"
+#define server_ip_1 "192.168.1.216"
 #define server_ip_2 "192.168.1.116"
 
 #define USERNAME "wang"
@@ -155,16 +156,14 @@ void Send_POL(char req,struct sockaddr_in * sock){
 }
 
 void Send_CMD(char Ctls, char Res){
-	char Sen_W;
-	Sen_W = Ctls;
-	sprintf(ip_info,"%c %c", Sen_W, Res);
+	ip_info[0] = Ctls;
+	ip_info[1] = Res;
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
 
 void Send_CMD_TO_MASTER(char Ctls, char Res){
-	char Sen_W;
-	Sen_W = Ctls;
-	sprintf(ip_info,"%c %c", Sen_W, Res);
+	ip_info[0] = Ctls;
+	ip_info[1] = Res;
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
 }
 
@@ -175,6 +174,17 @@ void *Keep_con(){
 		printf("Send KEEP_CON!\n");
 		sleep(10);
 	}
+}
+
+void clean_rec_buff(){
+	char tmp[50];
+	int ret;
+	set_rec_timeout(100000, 0);//(usec, sec)
+	while(ret > 0){
+		ret = recvfrom(sockfd, tmp, 10, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		printf("Clean recv buff %d.\n", ret);
+	}
+	set_rec_timeout(0, 1);//(usec, sec)
 }
 
 int main(){
@@ -209,10 +219,9 @@ int main(){
 		set_rec_timeout(0, 1);//(usec, sec)
 		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		char result;
-		Rec_W = Ctl_Rec[0];
-		result = Ctl_Rec[2];
+		result = Ctl_Rec[1];
 
-		if(Rec_W == GET_REQ){
+		if(Ctl_Rec[0] == GET_REQ){
 			printf("Receive ctl_w = %d result = %d\n", Rec_W, result);
 			if(result == 4){
 				printf("Verify and find node success!\n");
@@ -230,14 +239,18 @@ int main(){
 	}
 
 	if(i >= MAX_TRY) return OUT_TRY;
-	
+
+#if	KEEP_CONNECT_PACK
 	ret = pthread_create(&keep_connection, NULL, Keep_con, NULL);
 	if (ret != 0)
 		printf("can't create thread: %s\n", strerror(ret));
+#endif
 
+	clean_rec_buff();
 	printf("------------------ Request master IP!-------------------\n");
 
 	for(i = 0; i < MAX_TRY; i++){
+		memset(Ctl_Rec, 0, 50);
 		Send_IP_REQ();
 		printf("Send IP_REQ.\n");
 
@@ -256,19 +269,24 @@ int main(){
 
 	if(i >= MAX_TRY) return OUT_TRY;
 	
+	clean_rec_buff();
 	printf("------------------ Establish connection!-------------------\n");
-	for(i = 0; i < 2; i++)Send_POL(POL_REQ, &master_sin);
+	for(i = 0; i < 2; i++)
+		Send_POL(POL_REQ, &master_sin);
 
+	clean_rec_buff();
 	for(i = 0; i < MAX_TRY; i++){
+		memset(Ctl_Rec, 0, 50);
 		Send_POL(POL_SENT, &servaddr1);
 		printf("Send POL_SENT.\n");
 
 		set_rec_timeout(0, 1);//(usec, sec)
 		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-		Rec_W = Ctl_Rec[0];
 
-		if(Rec_W == GET_REQ){
-			if(Ctl_Rec[2] == 0x0b){
+		//printf("OP = %d\n", Ctl_Rec[0]);
+
+		if(Ctl_Rec[0] == GET_REQ){
+			if(Ctl_Rec[1] == 0x0b){
 				printf("Sever has got POL_SENT.\n");
 				break;
 			}
@@ -279,7 +297,10 @@ int main(){
 	if(i >= MAX_TRY) return OUT_TRY;
 
 	while(1){
+		set_rec_timeout(0, 0);//(usec, sec)
+		memset(Ctl_Rec, 0, 50);
 		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		printf("OPCODE = %d\n", Ctl_Rec[0]);
 
 		switch(Ctl_Rec[0]){
 			case POL_REQ:
@@ -290,16 +311,17 @@ int main(){
 			case S_POL_REQ:
 			printf("Get M_POL_REQ from server.\n");
 			for(i = 0; i < MAX_TRY; i++){
+				memset(Ctl_Rec, 0, 50);
 				Send_POL(POL_REQ, &master_sin);
 				printf("Send POL_REQ to master.\n");
 
+				set_rec_timeout(0, 1);//(usec, sec)
 				recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-				if(Ctl_Rec[0] == GET_REQ && Ctl_Rec[2] == 0x0a){
+				if(Ctl_Rec[0] == GET_REQ && Ctl_Rec[1] == 0x0a){
 					printf("Pole ok! Connection established.\n");
 					Send_CMD(GET_REQ, 0x10);
 					break;
 				}
-				sleep(1);
 			}
 
 			if(i >= MAX_TRY){
