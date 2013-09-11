@@ -8,6 +8,14 @@
 #define RESP_M_IP	0x07
 #define S_IP		0x08
 #define REQ_M_IP	0x09
+#define POL_REQ		0x0a
+#define POL_SENT	0x0b
+#define CON_ESTAB	0x0c
+#define AV_REQ		0x0d
+#define M_POL_REQ	0x0e
+#define S_POL_REQ	0x0f
+
+#define EXT_CMD		0xff
 
 //-----------------------------ERROR RETURN-------------------------------
 #define WRONG_VERIFY			-50

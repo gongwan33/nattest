@@ -318,12 +318,15 @@ int main(){
 				break;
 
 			case GET_REQ:
-				Get_W = recv_str[0];
-				res = recv_str[2];
-				if(res == 0x08){
+				if(recv_str[2] == 0x08){
 					Send_CMD(GET_REQ, 0x9);
 					printf("IP confirm pack has already responsed.\n");
 				}
+				break;
+
+			case POL_SENT:
+				Send_CMD(GET_REQ, 0xb);
+				printf("Get POL_SENT.\n");
 				break;
 
 

@@ -141,6 +141,11 @@ int Send_VUAP(){
 	return 0;
 }
 
+void Send_POL(char req,struct sockaddr_in * sock){
+	ip_info[0] = req;
+	sendto(sockfd, ip_info, 2, 0, (struct sockaddr *)sock, sizeof(struct sockaddr_in));
+}
+
 void Send_CMD(char Ctls, char Res){
 	char Sen_W;
 	Sen_W = Ctls;
@@ -216,7 +221,8 @@ int main(){
 	if (ret != 0)
 		printf("can't create thread: %s\n", strerror(ret));
 
-	printf("------------------ Wait for slave to establish connection!-------------------\n");
+
+	printf("------------------ Wait for slave IP!-------------------\n");
 
 	int slaver_act = 0;
 	while(!slaver_act){
@@ -245,6 +251,25 @@ int main(){
 	}
 
 	
+	printf("------------------ Wait for slave to establish connection!-------------------\n");
+	while(1){
+		memset(Ctl_Rec, 0, 50);
+
+		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		Rec_W = Ctl_Rec[0];
+
+		switch(Rec_W){
+			case POL_REQ:
+				printf("Get pole request!\n");
+			break;
+
+
+
+
+		}
+
+
+	}
 	/*
 	   for(j = 0; j < 10; j++){
 

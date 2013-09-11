@@ -146,6 +146,11 @@ void Send_IP_REQ(){
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
 
+void Send_POL(char req,struct sockaddr_in * sock){
+	ip_info[0] = req;
+	sendto(sockfd, ip_info, 2, 0, (struct sockaddr *)sock, sizeof(struct sockaddr_in));
+}
+
 void Send_CMD(char Ctls, char Res){
 	char Sen_W;
 	Sen_W = Ctls;
@@ -220,7 +225,7 @@ int main(){
 	if (ret != 0)
 		printf("can't create thread: %s\n", strerror(ret));
 
-	printf("------------------ Establish connection!-------------------\n");
+	printf("------------------ Request master IP!-------------------\n");
 
 	for(i = 0; i < 10; i++){
 		Send_IP_REQ();
@@ -241,8 +246,29 @@ int main(){
 
 	if(i >= 10) return OUT_TRY;
 	
+	printf("------------------ Establish connection!-------------------\n");
+	for(i = 0; i < 2; i++)Send_POL(POL_REQ, &master_sin);
 
-	
+	for(i = 0; i < 10; i++){
+		Send_POL(POL_SENT, &servaddr1);
+		printf("Send POL_SENT.\n");
+
+		set_rec_timeout(0, 1);//(usec, sec)
+		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		Rec_W = Ctl_Rec[0];
+
+		if(Rec_W == GET_REQ){
+			if(Ctl_Rec[2] == 0x0b){
+				printf("Sever has got POL_SENT.\n");
+				break;
+			}
+		}
+
+	}
+
+	if(i >= 10) return OUT_TRY;
+
+
 	/*
 	   for(j = 0; j < 10; j++){
 
