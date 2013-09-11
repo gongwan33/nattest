@@ -12,7 +12,7 @@
 #include <JEANP2PPRO.h>
 
 #define MAX_TRY 10
-#define server_ip_1 "192.168.1.216"
+#define server_ip_1 "192.168.1.4"
 #define server_ip_2 "192.168.1.116"
 
 #define USERNAME "wang"
