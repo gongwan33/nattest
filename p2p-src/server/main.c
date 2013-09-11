@@ -82,6 +82,18 @@ void Send_CMD(char Ctl, char res){
 	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)&recv_sin, recv_sin_len);
 }
 
+int Send_CMD_TO_SLAVE(char Ctl, char * name){
+	char RESP[50];
+	struct node_net * tmp_node;
+	tmp_node = find_item(name);
+	if(tmp_node == NULL) return -1;
+	
+	RESP[0] = Ctl;
+	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)&tmp_node->recv_sin_s, sizeof(struct sockaddr_in));
+
+	return 0;
+}
+
 int Send_S_IP(char * name){
 	char RESP[50];
 	char GET_W;
@@ -348,22 +360,48 @@ int main(){
 				Send_CMD(GET_REQ, 0xb);
 				printf("Get POL_SENT.\n");
 				int i = 0;
+				int master_mode = 1;
+				int cmd_sent = 0;
 				for(i = 0; i < MAX_TRY; i++){
-					Send_M_POL_REQ(Uname);
+					if(!cmd_sent) Send_M_POL_REQ(Uname);
 					printf("Master connecting slave...\n");
-
 					recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 					if(recv_str[0] == GET_REQ && recv_str[2] == 0x0e){
 						printf("Pole ok! Connection established.\n");
 						break;
 					}
-					if(recv_str[0] == GET_REQ && recv_str[2] == 0x0e){
+					else if(recv_str[0] == GET_REQ && recv_str[2] == 0x0f){
 						printf("Pole failed! Change to slave mode.\n");
+						master_mode = 0;
 						break;
 					}
+					else if(recv_str[0] == GET_REQ && recv_str[2] == 0x12)
+						cmd_sent = 1;
+					sleep(5);
 				}
-				break;
 
+				cmd_sent = 0;
+				if(master_mode == 0){
+					for(i = 0; i < MAX_TRY; i++){
+						if(!cmd_sent) Send_CMD_TO_SLAVE(S_POL_REQ, Uname);
+						printf("Slave connecting master...\n");
+
+						recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+						if(recv_str[0] == GET_REQ && recv_str[2] == 0x10){
+							printf("Pole ok! Connection established.\n");
+							break;
+						}
+						else if(recv_str[0] == GET_REQ && recv_str[2] == 0x11){
+							printf("Pole failed!\n");
+							break;
+						}
+						else if(recv_str[0] == GET_REQ && recv_str[2] == 0x13)
+							cmd_sent = 1;
+						sleep(5);
+					}
+				}
+
+				break;
 
 		}
 	}

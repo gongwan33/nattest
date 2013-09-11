@@ -153,6 +153,13 @@ void Send_CMD(char Ctls, char Res){
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
 
+void Send_CMD_TO_SLAVE(char Ctls, char Res){
+	char Sen_W;
+	Sen_W = Ctls;
+	sprintf(ip_info,"%c %c", Sen_W, Res);
+	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
+}
+
 void *Keep_con(){
 	pthread_detach(pthread_self());
 	while(1){
@@ -261,11 +268,27 @@ int main(){
 		switch(Rec_W){
 			case POL_REQ:
 				printf("Get pole request!\n");
+				Send_CMD_TO_SLAVE(GET_REQ, 0x0a);
 			break;
 
 			case M_POL_REQ:
-				printf("Get M_POL_REQ from server.\n");
-
+			Send_CMD(GET_REQ, 0x12);
+			printf("Get M_POL_REQ from server.\n");
+			for(i = 0; i < MAX_TRY; i++){
+				Send_POL(POL_REQ, &slave_sin);
+				printf("Send POL_REQ to slave.\n");
+				recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+				if(Ctl_Rec[0] == GET_REQ && Ctl_Rec[2] == 0x0a){
+					printf("Pole ok! Connection established.\n");
+					Send_CMD(GET_REQ, 0x0e);
+					break;
+				}
+				sleep(1);
+			}
+			if(i >= MAX_TRY){
+				Send_CMD(GET_REQ, 0x0f);
+				printf("Pole failed! Requiring slave mode.\n");
+			}
 			break;	
 
 

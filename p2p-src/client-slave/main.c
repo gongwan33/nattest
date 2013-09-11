@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <JEANP2PPRO.h>
 
+#define MAX_TRY 10
 #define server_ip_1 "192.168.1.216"
 #define server_ip_2 "192.168.1.116"
 
@@ -160,6 +161,13 @@ void Send_CMD(char Ctls, char Res){
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
 
+void Send_CMD_TO_MASTER(char Ctls, char Res){
+	char Sen_W;
+	Sen_W = Ctls;
+	sprintf(ip_info,"%c %c", Sen_W, Res);
+	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
+}
+
 void *Keep_con(){
 	pthread_detach(pthread_self());
 	while(1){
@@ -194,7 +202,7 @@ int main(){
 	}
 
 	printf("------------------- Connection and user name verifying ---------------------\n");
-	for(i = 0; i < 10; i++){
+	for(i = 0; i < MAX_TRY; i++){
 		Send_VUAPS();
 		printf("Send uname and passwd\n");
 
@@ -221,7 +229,7 @@ int main(){
 		}
 	}
 
-	if(i >= 10) return OUT_TRY;
+	if(i >= MAX_TRY) return OUT_TRY;
 	
 	ret = pthread_create(&keep_connection, NULL, Keep_con, NULL);
 	if (ret != 0)
@@ -229,7 +237,7 @@ int main(){
 
 	printf("------------------ Request master IP!-------------------\n");
 
-	for(i = 0; i < 10; i++){
+	for(i = 0; i < MAX_TRY; i++){
 		Send_IP_REQ();
 		printf("Send IP_REQ.\n");
 
@@ -246,12 +254,12 @@ int main(){
 
 	}
 
-	if(i >= 10) return OUT_TRY;
+	if(i >= MAX_TRY) return OUT_TRY;
 	
 	printf("------------------ Establish connection!-------------------\n");
 	for(i = 0; i < 2; i++)Send_POL(POL_REQ, &master_sin);
 
-	for(i = 0; i < 10; i++){
+	for(i = 0; i < MAX_TRY; i++){
 		Send_POL(POL_SENT, &servaddr1);
 		printf("Send POL_SENT.\n");
 
@@ -268,23 +276,42 @@ int main(){
 
 	}
 
-	if(i >= 10) return OUT_TRY;
+	if(i >= MAX_TRY) return OUT_TRY;
 
+	while(1){
+		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 
-	/*
-	   for(j = 0; j < 10; j++){
+		switch(Ctl_Rec[0]){
+			case POL_REQ:
+				Send_CMD_TO_MASTER(GET_REQ, 0x0a);
+				printf("Receive GET_REQ\n");
+				break;
 
-	   sprintf(ip_info,"#1 %s [%d]", inet_ntoa(*(struct in_addr *)ip), port);
-	   printf("send %s\n", ip_info);
+			case S_POL_REQ:
+			printf("Get M_POL_REQ from server.\n");
+			for(i = 0; i < MAX_TRY; i++){
+				Send_POL(POL_REQ, &master_sin);
+				printf("Send POL_REQ to master.\n");
 
-	   for(i = 0; i < count; i++){
-	   sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1,sizeof(servaddr1)); 
-	   }
+				recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+				if(Ctl_Rec[0] == GET_REQ && Ctl_Rec[2] == 0x0a){
+					printf("Pole ok! Connection established.\n");
+					Send_CMD(GET_REQ, 0x10);
+					break;
+				}
+				sleep(1);
+			}
 
-	   usleep(1000000);
-	   }
-	   */
-	while(1);
+			if(i >= MAX_TRY){
+				Send_CMD(GET_REQ, 0x11);
+				printf("Pole failed! Requiring slave mode.");
+			}
+
+			break;	
+
+		}
+	}
+
 	close(sockfd);
 	return 0;
 }
