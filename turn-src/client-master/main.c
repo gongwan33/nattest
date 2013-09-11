@@ -10,29 +10,27 @@
 #include <net/if.h>
 #include <pthread.h>
 
-#define ACT_NETCARD "eth0"
-//#define server_ip "58.214.236.114"
-#define server_ip "192.168.1.172"
-#define master_ip "192.168.1.172"
-#define UNAME "zhoujie"
-#define PASSWD "123456"
-#define server_port1 61000
-#define server_port2 61001
-#define master_port 1000
+#include "info.h"
 
-static struct sockaddr_in server_addr, master_addr;
+
+static struct sockaddr_in server_addr, master_addr, dst_addr, local_addr;
 static struct ifreq ifr, *pifr;
 static struct ifconf ifc;
 static char ip_info[50];
-static int sockfd,sfd;
+static int sockfd,sfd,sockfd_udp;
 static int port,sin_size;
 static char  ip[4], buff[1024];
 static char Accaunt_info[20];
 static char verify_buff[5];
 static int peer_ready = 0;
+static long fsize;
+static char * buff1;
+static int create_thread = 1;
+static int wait_peer = 1;
 
 int local_net_init(){
 	int on,ret1;
+
 	memset(&master_addr, 0, sizeof(master_addr));
 	master_addr.sin_family = AF_INET;
 	master_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -54,6 +52,33 @@ int local_net_init(){
 
 	return 0;
 }
+int dst_net_init_udp(){
+	int ret1;
+	memset(&local_addr, 0, sizeof(local_addr));
+	local_addr.sin_family = AF_INET;
+	local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	local_addr.sin_port = htons(local_port);
+
+	memset(&dst_addr, 0, sizeof(dst_addr));
+	dst_addr.sin_family = AF_INET;
+	//dst_addr.sin_addr.s_addr = inet_addr(server_ip);
+	if( inet_pton(AF_INET, server_ip, &dst_addr.sin_addr) <= 0){
+		printf("inet_pton error for %s\n",server_ip);
+		return -1;
+	}	
+	dst_addr.sin_port = htons(server_port3);
+	bzero(&(dst_addr.sin_zero), 8);
+	if((sockfd_udp = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
+		printf("create socket error: %s(errno: %d)\n", strerror(errno),errno);
+		return -1;
+	}
+	if(bind(sockfd_udp, (struct sockaddr *) (&local_addr),sizeof(local_addr)) == -1){
+		printf ("Bind error: %s\a\n", strerror (errno));
+		return -2;
+	}	
+	return 0;
+}
+
 
 int get_local_ip_port(){
 	int i = 0;
@@ -142,8 +167,6 @@ void * wait_for_peer(){
 	int ret1,n;
 	char peer_info[20];	
 
-
-
 	n = recv(sockfd, peer_info, 20, 0);
 	printf("n = %d\n",n);
 	if(n == -1)
@@ -156,17 +179,87 @@ void * wait_for_peer(){
 			peer_ready = 1;
 		}
 	}
-
-	return;
 }
 
-int main(){
-	int i;
+FILE* Open_file(char * s){
+	FILE *fp;
+	fp = NULL;
+	printf("File path:%s\n",s);
+	if((fp = fopen(s,"r")) == NULL){
+		printf("file open error\n");
+		return NULL;
+	}
+	else 
+		return fp;
+}
+
+void * transmit_data(){
+	int ret = 0;
+	int n,i;
+	char *buff2 ="abcd";
+	int sendbytes;
+	while(wait_peer){
+		if(peer_ready == 1){
+			wait_peer =0;
+			ret = dst_net_init_udp();
+			if(ret < 0){
+				printf("Local bind failed!!%d\n", ret);
+			}
+			sleep(1);
+			//if((sendbytes = sendto(sockfd_udp, buff2, 20, 0, (struct sockaddr *)&dst_addr, sizeof(dst_addr))) < 0){
+			//	printf("error:%s(%d)\n",strerror(errno),errno);
+			n = fsize/1024 + 1;
+			printf("n = %d\n",n);
+			for(i = 0; i < n; i++){
+				if(i != n-1){
+					if((sendbytes = sendto(sockfd_udp, buff1+i*1024, 1024*sizeof(char), 0, (struct sockaddr *)&dst_addr, sizeof(dst_addr))) < 0)
+						printf("error:%s(%d)\n",strerror(errno),errno);
+					else
+						printf("bytes send:%d\n",sendbytes);
+				}
+				else
+					if((sendbytes = sendto(sockfd_udp, buff1+i*1024, fsize - (n-1)*1024*sizeof(char), 0, (struct sockaddr *)&dst_addr, sizeof(dst_addr))) < 0)
+						printf("error:%s(%d)\n",strerror(errno),errno);
+					else
+						printf("bytes send:%d\n",sendbytes);
+			}
+
+		}
+	}
+	
+}
+
+int main(int argc, char* argv[]){
+	int i,count = 0;
 	int ret;
 	void * status;
-
+	void * status1;
+	FILE * fp;
+	fp = NULL;
+	buff1 = NULL;	
+	
+	struct h264 * h_264;
 	pthread_t pthread_wait_for_peer;
+	pthread_t pthread_transmit_data;
 
+	if(argc == 1){
+		printf("Please type in a file name\n");
+		return 0;
+	}
+	fp = Open_file(argv[1]);
+	if(fp == NULL){
+		return -1;
+	}
+	else{
+		ret = fseek(fp, 0, SEEK_END);
+		fsize = ftell(fp)+1;
+		ret = fseek(fp, 0, SEEK_SET);
+		printf("File size is %ld\n",fsize);
+		buff1 = (char *)malloc(fsize * sizeof(char));
+		count = fread(buff1, 1024, (fsize/1024+1),fp);
+		printf("count = %d\n",count);
+	}
+	
 	ret = local_net_init();
 	if(ret < 0){
 		printf("local bind fail!\n",ret);
@@ -214,15 +307,11 @@ int main(){
 		pthread_create(&pthread_wait_for_peer, NULL, wait_for_peer, NULL);
 	}
 
-	while(1){
-		if(peer_ready == 1){
-			printf("peer is ready,start tramsmit...\n");
-			return 0;
-		}
-		else
-			sleep(1);
-	}
-	pthread_join(pthread_wait_for_peer,status);
+	pthread_create(&pthread_transmit_data, NULL, transmit_data, NULL);
+
+//	pthread_join(pthread_wait_for_peer,status);
+//	pthread_join(pthread_transmit_data,status1);
+	while(1);
 	close(sockfd);
 
 //	printf(".................................Wait for peer's connection........................\n ");

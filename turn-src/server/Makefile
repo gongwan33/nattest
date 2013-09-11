@@ -1,5 +1,6 @@
  CC = gcc
  CFLAGS = -lpthread 
+ CFLAGS += -I/home/zj/nattest/turn-src/include/
  OBJS = main.o
  TARGET = natserver
 

@@ -10,27 +10,20 @@
 #include <net/if.h>
 #include <pthread.h>
 
-#define ACT_NETCARD "eth0"
-//#define server_ip "58.214.236.114"
-#define server_ip "192.168.1.172"
-#define master_ip "192.168.1.172"
-#define UNAME "zhoujie"
-#define PASSWD "123456"
-#define server_port1 61000
-#define server_port2 61001
-#define server_port3 61002
-#define slave_port 2000
+#include "info.h"
 
-static struct sockaddr_in server_addr, master_addr;
+static struct sockaddr_in server_addr, master_addr, sin, recv_sin;
+static int sin_len,recv_sin_len;
 static struct ifreq ifr, *pifr;
 static struct ifconf ifc;
 static char ip_info[50];
-static int sockfd,sfd;
+static int sockfd,sfd,sfd_udp;
 static int port,sin_size;
 static char  ip[4], buff[1024];
 static char Accaunt_info[20];
 static char verify_buff[5];
 static int peer_ready = 0;
+static char data_buff[10 * 1024];
 
 int local_net_init(){
 	int on,ret1;
@@ -43,7 +36,6 @@ int local_net_init(){
 		printf("create socket error: %s(errno: %d)\n", strerror(errno),errno);
 		return -1;
 	}
-
 
 	on = 1;			//Bind already in use
 	ret1 = setsockopt( sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on) );
@@ -157,10 +149,33 @@ int wait_for_callback(){
 	return 0;
 }
 
+int local_net_init_udp(){
+	bzero(&sin, sizeof(sin));
+	sin.sin_family = AF_INET;
+	//sin.sin_addr.s_addr = htonl(INADDR_ANY);
+	sin.sin_addr.s_addr = inet_addr(slave_ip);
+
+	sin.sin_port = htons(slave_port2);
+	sin_len = sizeof(sin);
+
+	sfd_udp = socket(AF_INET, SOCK_DGRAM, 0);
+	if(!sfd_udp) return -1;
+	
+	if(bind(sfd_udp, (struct sockaddr *)&sin, sizeof(sin)) != 0){
+		printf("bind erro\n");
+		return -2;
+	}	
+
+	printf("bind to port [%d]\n", slave_port2);
+
+	return 0;
+}
 
 int main(){
 	int i;
 	int ret;
+	int num_recv = 0;
+
 	pthread_t pthread_wait_for_peer;
 
 	ret = local_net_init();
@@ -169,7 +184,7 @@ int main(){
 		return ret;
 	}
 
-	ret = set_server_struct(server_ip,server_port3);
+	ret = set_server_struct(server_ip,server_port2);
 	if(ret < 0){
 		printf("set server ip fail!\n");
 		return ret;
@@ -189,6 +204,18 @@ int main(){
 	ret = wait_for_callback();
 	if(ret == 1){
 		printf("Verify success!Start to transmit...\n");
+		printf(".............................recv data from server.............................\n");
+
+		local_net_init_udp();
+		recv_sin_len = sizeof(recv_sin);
+		while(1){
+			if((num_recv = recvfrom(sfd_udp, data_buff, sizeof(data_buff), 0, (struct sockaddr *)&recv_sin, &recv_sin_len)) < 0){
+				perror("recv");
+			}
+			else
+				printf("recv = %d\n",num_recv);
+		}
+
 	}
 
 	close(sockfd);

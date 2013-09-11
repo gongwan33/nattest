@@ -8,37 +8,26 @@
 #include <errno.h>
 #include <pthread.h>
 
-#define PORT1 61000
-#define PORT2 61001
-#define PORT3 61002
-#define master_port 1000
-#define slave_port 2000
-#define master_ip "192.168.1.172"
-#define slave_ip "192.168.1.172"
-#define server_ip "58.214.236.114"
-#define PEER_SHEET_LEN 200
-
-#define UNAME "zhoujie"
-#define PASSWD "123456"
+#include "info.h"
 
 static char ver[1];
 static char ver_slave[1];
 static char pathname[50] = "./natinfo.log";
-static int sfd, listenfd, listenfd1, sfd1, listenfd2;
-static struct sockaddr_in sin, recv_sin, master_addr, slave_addr;	
+static int sfd, listenfd, listenfd1, sfd1, listenfd2, sfd_udp, sockfd_udp_dst;
+static struct sockaddr_in sin, recv_sin, master_addr, slave_addr,local_addr, dst_addr;	
 static int sin_len, recv_sin_len;
 static char recv_str[50];
-static int port1 = PORT1;
-static int port2 = PORT2;
-static int port3 = PORT3;
+static int port1 = server_port1;
+static int port2 = server_port2;
+static int port3 = server_port3;
 static int masterport = master_port;
 static char Uname[10];
 static char Passwd[10];
 static char buff[20];
 static char buffer[20];
+static char data_buff[10 * 1024];
+static int Start_send = 0;
 
-static char Peers_Login[PEER_SHEET_LEN][20];
-static int  Peers_Sheet_Index = 0;
 static int ret = 0;
 static int n = 0;
 static int Verify_master = 0;
@@ -70,19 +59,27 @@ int local_net_init(int sock,int Port){
 	return sock;
 }
 
-int set_master_struct(char * ip1, int port1){
-	memset(&master_addr, 0, sizeof(master_addr));
-	master_addr.sin_family = AF_INET;
-	master_addr.sin_port = htons(port1);
+int local_net_init_udp(){
+	bzero(&sin, sizeof(sin));
+	sin.sin_family = AF_INET;
+	//sin.sin_addr.s_addr = htonl(INADDR_ANY);
+	sin.sin_addr.s_addr = inet_addr(server_ip);
+
+	sin.sin_port = htons(port3);
+	sin_len = sizeof(sin);
+
+	sfd_udp = socket(AF_INET, SOCK_DGRAM, 0);
+	if(!sfd_udp) return -1;
 	
-	if( inet_pton(AF_INET, ip1, &master_addr.sin_addr) <= 0){
-		printf("inet_pton error for %s\n",ip1);
-		return -1;
-	}
+	if(bind(sfd_udp, (struct sockaddr *)&sin, sizeof(sin)) != 0){
+		printf("bind erro\n");
+		return -2;
+	}	
+
+	printf("bind to port [%d]\n", port3);
 
 	return 0;
 }
-
 
 int UAP_check(){
 	int i = 0,k = 0;
@@ -150,7 +147,7 @@ void * wait_for_slave(){
 	char slave_info[2];
 	//pthread_detach(pthread_self());
 
-	listenfd1 = local_net_init(listenfd1,port3);
+	listenfd1 = local_net_init(listenfd1,port2);
 	if(listenfd1 < 0){
 		printf("local net init fail!\n");
 		return ret;
@@ -201,7 +198,6 @@ void * wait_for_slave(){
 		slave_info[2] = '\0';
 
 		sendbytes = send(sfd1, slave_info, strlen(slave_info), 0);
-		printf("sendbytes = %d\n",sendbytes);
 		if(sendbytes < 0)
 		{
 			printf("send msg error: %s(errno: %d)\n", strerror(errno), errno);
@@ -235,7 +231,8 @@ void * wait_for_master(){
 				break;
 			}
 			else if(ret == 0){
-				nbytes = recv_data();
+				Start_send = 1;
+				printf("send slave info ok!\n");
 			}
 			break;
 		}
@@ -246,8 +243,62 @@ void * wait_for_master(){
 	}
 }
 
-int recv_data(){
+int dst_net_init_udp(){
+	int ret1;
+	memset(&local_addr, 0, sizeof(local_addr));
+	local_addr.sin_family = AF_INET;
+	local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	local_addr.sin_port = htons(server_port4);
+
+	memset(&dst_addr, 0, sizeof(dst_addr));
+	dst_addr.sin_family = AF_INET;
+	//dst_addr.sin_addr.s_addr = inet_addr(server_ip);
+	if( inet_pton(AF_INET,slave_ip, &dst_addr.sin_addr) <= 0){
+		printf("inet_pton error for %s\n",server_ip);
+		return -1;
+	}	
+	dst_addr.sin_port = htons(slave_port2);
+	bzero(&(dst_addr.sin_zero), 8);
+	if((sockfd_udp_dst = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
+		printf("create socket error: %s(errno: %d)\n", strerror(errno),errno);
+		return -1;
+	}
+	if(bind(sockfd_udp_dst, (struct sockaddr *) (&local_addr),sizeof(local_addr)) == -1){
+		printf ("Bind error: %s\a\n", strerror (errno));
+		return -2;
+	}	
+	return 0;
+}
+void * recv_data(){
+	int ret;
+	int num_recv = 0;
+	int sendbytes;
+
+	ret = local_net_init_udp();
+	if(ret < 0){
+		printf("Local bind failed!!%d\n", ret);
+	}
 	
+	ret = dst_net_init_udp();
+	if(ret < 0){
+		printf("Local bind failed!!%d\n", ret);
+	}
+
+	recv_sin_len = sizeof(recv_sin);
+	while(1){
+		if((num_recv = recvfrom(sfd_udp, data_buff, sizeof(data_buff), 0, (struct sockaddr *)&recv_sin, &recv_sin_len)) < 0){
+			perror("recv");
+		}
+		else{
+			printf("recv = %d\n",num_recv);
+			if((sendbytes = sendto(sockfd_udp_dst, data_buff, num_recv, 0, (struct sockaddr *)&dst_addr, sizeof(dst_addr))) < 0)
+				perror("send");
+			else
+				printf("bytes send to slave: %d\n",sendbytes);
+		}
+	}
+	//	printf("buff:%s\n",data_buff);
+
 }
 
 int send_slave_info(){
@@ -270,27 +321,36 @@ int main(){
 	int ret = 0;
 	void * status;
 	void * status1;
+	void * status2;
+
 	pthread_t pthread_wait_for_slave;
 	pthread_t pthread_wait_for_master;
+	pthread_t pthread_start_recv_data;
 
 	pthread_create(&pthread_wait_for_master, NULL, wait_for_master, NULL);
 	sleep(1);
 	pthread_create(&pthread_wait_for_slave, NULL, wait_for_slave, NULL);
 
 	while(1){
-		if((Verify_slave && Verify_master) ==1 ){
+		if(Start_send){
 			printf("Transmit start!\n");
-
+			pthread_create(&pthread_start_recv_data, NULL, recv_data, NULL);
+			break;
 		}
 		else{
 			sleep(1);
 		}
 	}
+	
 	pthread_join(pthread_wait_for_slave,status);
 	pthread_join(pthread_wait_for_master,status1);
+	pthread_join(pthread_start_recv_data,status2);
 
-	//while(1);	
+	while(1);	
 	close(listenfd);
+	close(listenfd1);
+	close(sfd);
+	close(sfd1);
 	return 0;	
 }
 
