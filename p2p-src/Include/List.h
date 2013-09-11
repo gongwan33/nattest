@@ -47,6 +47,8 @@ struct node_net{
 	char * Passwd;
 	struct sockaddr_in * recv_sin_m;
 	struct sockaddr_in * recv_sin_s;
+	struct sockaddr_in * local_sin_m;
+	struct sockaddr_in * local_sin_s;
 	int sin_len;
 	
 	struct list_head list;

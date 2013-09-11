@@ -21,7 +21,7 @@
 #define server_port 61000
 #define local_port 6788
 
-static struct sockaddr_in servaddr1, local_addr, recv_sin, master_sin;
+static struct sockaddr_in servaddr1, local_addr, recv_sin, master_sin, host_sin;
 static struct ifreq ifr, *pifr;
 static struct ifconf ifc;
 static char ip_info[50];
@@ -48,6 +48,13 @@ int local_net_init(){
 	}
 
 	return 0;
+}
+
+void init_host_sin(char * str_ip, int p){
+	memset(&host_sin, 0, sizeof(host_sin));
+	host_sin.sin_family = AF_INET;
+	host_sin.sin_addr.s_addr = inet_addr(str_ip);
+	host_sin.sin_port = htons(p);
 }
 
 void init_recv_sin(){
@@ -92,6 +99,8 @@ int get_local_ip_port(){
 	printf("local ip is %s\n",inet_ntoa(*(struct in_addr *)ip));
 	printf("local port is %d\n", port);
 
+	init_host_sin(inet_ntoa(*(struct in_addr*)ip), port);
+
 	return 0;
 }
 
@@ -116,11 +125,18 @@ int set_rec_timeout(int usec, int sec){
 	setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,&tv_out, sizeof(tv_out));
 }
 
-void Send_VUAPS(){
+int Send_VUAPS(){
 	char Sen_W;
 	Sen_W = V_UAP_S;
-	sprintf(ip_info,"%c %s %s", Sen_W, USERNAME, PASSWD);
+	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
+
+	ip_info[0] = Sen_W;
+	memcpy(ip_info + 1, USERNAME, 10);
+	memcpy(ip_info + 12, PASSWD, 10);
+	memcpy(ip_info + 34, &host_sin, sizeof(struct sockaddr_in));
+
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	return 0;
 }
 
 void Send_IP_REQ(){
@@ -218,6 +234,7 @@ int main(){
 			printf("Receive ctl_w = %d\n", Rec_W);
 			memcpy(&master_sin, Ctl_Rec + 1, sizeof(struct sockaddr_in));
 			printf("Get master IP: %s\n", inet_ntoa(master_sin.sin_addr));
+			break;
 		}
 
 	}

@@ -133,12 +133,14 @@ int Peer_Login_Init(){
 	Peer_Login->sin_len = sizeof(struct sockaddr_in);
 	Peer_Login->recv_sin_s = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
 	Peer_Login->recv_sin_m = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+	Peer_Login->local_sin_m = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+	Peer_Login->local_sin_s = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
 
 	if(Peer_Login->Uname && Peer_Login->Passwd && Peer_Login->sin_len && Peer_Login->recv_sin_s && Peer_Login->recv_sin_m) return 0;
 	else return -1;
 }
 
-int Peer_Set(char * name, char * passwd, struct sockaddr_in * r){
+int Peer_Set(char * name, char * passwd, struct sockaddr_in * r, struct sockaddr_in * l){
 	int ret = Peer_Login_Init();
 	if(ret < 0){
 		printf("Malloc failed when init Peer login sheet!!\n");
@@ -147,17 +149,19 @@ int Peer_Set(char * name, char * passwd, struct sockaddr_in * r){
 
 	strcpy(Peer_Login->Uname, name);
 	strcpy(Peer_Login->Passwd, passwd);
-	memcpy(Peer_Login->recv_sin_m, r, sizeof(r));
+	memcpy(Peer_Login->recv_sin_m, r, sizeof(struct sockaddr_in));
+	memcpy(Peer_Login->local_sin_m, l, sizeof(struct sockaddr_in));
 	
 	add_item(Peer_Login);
 
 	return 0;
 }
 
-int Peer_Set_Slave(char * name, struct sockaddr_in * r){
+int Peer_Set_Slave(char * name, struct sockaddr_in * r, struct sockaddr_in * l){
 	struct node_net *tmp_node = find_item(name);
 	if(tmp_node != NULL){
 		memcpy(tmp_node->recv_sin_s, r, sizeof(struct sockaddr_in));
+		memcpy(tmp_node->local_sin_s, l, sizeof(struct sockaddr_in));
 		return 0;
 	}
 	return -1;
@@ -167,7 +171,8 @@ int main(){
 	int ret = 0;
 	char Get_W;
 	char res;
-	
+	struct sockaddr_in tmp_sin;
+
 	init_list();
 	
 	ret = local_net_init();
@@ -188,14 +193,19 @@ int main(){
 
 		switch(Get_W){
 			case V_UAP:
-				sscanf(recv_str, "%c %s %s", &Get_W, Uname, Passwd);
+				Get_W = recv_str[0];
+				memcpy(Uname, recv_str + 1, 10);
+				memcpy(Passwd, recv_str + 12, 10);
+				memcpy(&tmp_sin, recv_str + 34, sizeof(struct sockaddr_in));
+
 				//printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
 				if(Uname == NULL){
 					printf("Error:User name is NULL!!");
 					break;
 				}
 
-				printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
+				printf("Recieve from %s [%d]:%d %s *** %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname,\
+						inet_ntoa(tmp_sin.sin_addr));
 				printf("Verify result: Uname = %d Passwd = %d\n", strcmp(UNAME, Uname), strcmp(PASSWD, Passwd));
 
 				if((strcmp(UNAME, Uname) != 0) || (strcmp(PASSWD, Passwd) != 0)){
@@ -209,7 +219,7 @@ int main(){
 					int Insert_Success = 0;
 					if(Find_Peer(Uname) == 0){
 						if(Peers_Sheet_Index < PEER_SHEET_LEN){
-							ret = Peer_Set(Uname, Passwd, &recv_sin);
+							ret = Peer_Set(Uname, Passwd, &recv_sin, &tmp_sin);
 							if(ret < 0){
 								printf("Set peer failed!\n");
 								return ret;
@@ -234,14 +244,19 @@ int main(){
 				break;
 
 			case V_UAP_S:
-				sscanf(recv_str, "%c %s %s", &Get_W, Uname, Passwd);
+				Get_W = recv_str[0];
+				memcpy(Uname, recv_str + 1, 10);
+				memcpy(Passwd, recv_str + 12, 10);
+				memcpy(&tmp_sin, recv_str + 34, sizeof(struct sockaddr_in));
+
 				//printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
 				if(Uname == NULL){
 					printf("Error:User name is NULL!!");
 					break;
 				}
 
-				printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
+				printf("Recieve from %s [%d]:%d %s *** %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname,\
+						inet_ntoa(tmp_sin.sin_addr));
 				printf("Verify result: Uname = %d Passwd = %d\n", strcmp(UNAME, Uname), strcmp(PASSWD, Passwd));
 
 				if((strcmp(UNAME, Uname) != 0) || (strcmp(PASSWD, Passwd) != 0)){
@@ -261,7 +276,7 @@ int main(){
 					if(Find_Success){
 						Send_CMD(GET_REQ, 0x4);
 						printf("Send response.\n");
-						ret = Peer_Set_Slave(Uname, &recv_sin);
+						ret = Peer_Set_Slave(Uname, &recv_sin, &tmp_sin);
 						if(ret < 0){
 							printf("Login sheet is broken!\n");
 							return LOGIN_SHEET_BROKEN;
