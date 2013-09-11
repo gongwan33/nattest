@@ -148,7 +148,9 @@ void Send_IP_REQ(){
 
 void Send_POL(char req,struct sockaddr_in * sock){
 	ip_info[0] = req;
-	sendto(sockfd, ip_info, 2, 0, (struct sockaddr *)sock, sizeof(struct sockaddr_in));
+	if(req == POL_SENT) 
+		memcpy(ip_info + 1, USERNAME, 10);
+	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)sock, sizeof(struct sockaddr_in));
 }
 
 void Send_CMD(char Ctls, char Res){

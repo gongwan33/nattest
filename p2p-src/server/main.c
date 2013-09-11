@@ -111,8 +111,6 @@ int Send_S_IP(char * name){
 
 int Send_M_IP(char * name){
 	char RESP[50];
-	char GET_W;
-	char res;
 	struct node_net * tmp_node;
 	int i;
 	tmp_node = find_item(name);
@@ -123,6 +121,22 @@ int Send_M_IP(char * name){
 	
 	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)tmp_node->recv_sin_s, recv_sin_len);
 	printf("Send master ip to slave!%s\n", inet_ntoa(tmp_node->recv_sin_m->sin_addr));
+
+	return 0;
+}
+
+int Send_M_POL_REQ(char * name){
+	char RESP[50];
+	struct node_net * tmp_node;
+	int i;
+	tmp_node = find_item(name);
+	if(tmp_node == NULL) return -1;
+
+	RESP[0] = M_POL_REQ;
+	
+	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)tmp_node->recv_sin_m, recv_sin_len);
+
+	return 0;
 }
 
 int Peer_Login_Init(){
@@ -193,6 +207,7 @@ int main(){
 
 		switch(Get_W){
 			case V_UAP:
+				memset(Uname, 0, 10);
 				Get_W = recv_str[0];
 				memcpy(Uname, recv_str + 1, 10);
 				memcpy(Passwd, recv_str + 12, 10);
@@ -244,6 +259,7 @@ int main(){
 				break;
 
 			case V_UAP_S:
+				memset(Uname, 0, 10);
 				Get_W = recv_str[0];
 				memcpy(Uname, recv_str + 1, 10);
 				memcpy(Passwd, recv_str + 12, 10);
@@ -292,6 +308,7 @@ int main(){
 				break;
 				
 			case REQ_M_IP:
+				memset(Uname, 0, 10);
 				sscanf(recv_str, "%c %s", &Get_W, Uname);
 				//printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
 				if(Uname == NULL){
@@ -325,8 +342,26 @@ int main(){
 				break;
 
 			case POL_SENT:
+				memset(Uname, 0, 10);
+				memcpy(Uname, recv_str + 1, 10);
+
 				Send_CMD(GET_REQ, 0xb);
 				printf("Get POL_SENT.\n");
+				int i = 0;
+				for(i = 0; i < MAX_TRY; i++){
+					Send_M_POL_REQ(Uname);
+					printf("Master connecting slave...\n");
+
+					recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+					if(recv_str[0] == GET_REQ && recv_str[2] == 0x0e){
+						printf("Pole ok! Connection established.\n");
+						break;
+					}
+					if(recv_str[0] == GET_REQ && recv_str[2] == 0x0e){
+						printf("Pole failed! Change to slave mode.\n");
+						break;
+					}
+				}
 				break;
 
 

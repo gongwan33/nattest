@@ -263,7 +263,10 @@ int main(){
 				printf("Get pole request!\n");
 			break;
 
+			case M_POL_REQ:
+				printf("Get M_POL_REQ from server.\n");
 
+			break;	
 
 
 		}
