@@ -241,8 +241,8 @@ int main(){
 					break;
 				}
 
-				printf("Recieve from %s [%d]:%d %s *** %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname,\
-						inet_ntoa(tmp_sin.sin_addr));
+				printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
+				printf("Master local IP is %s\n", inet_ntoa(tmp_sin.sin_addr));
 				printf("Verify result: Uname = %d Passwd = %d\n", strcmp(UNAME, Uname), strcmp(PASSWD, Passwd));
 
 				if((strcmp(UNAME, Uname) != 0) || (strcmp(PASSWD, Passwd) != 0)){
@@ -293,8 +293,8 @@ int main(){
 					break;
 				}
 
-				printf("Recieve from %s [%d]:%d %s *** %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname,\
-						inet_ntoa(tmp_sin.sin_addr));
+				printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
+				printf("Slave local IP is %s\n", inet_ntoa(tmp_sin.sin_addr));
 				printf("Verify result: Uname = %d Passwd = %d\n", strcmp(UNAME, Uname), strcmp(PASSWD, Passwd));
 
 				if((strcmp(UNAME, Uname) != 0) || (strcmp(PASSWD, Passwd) != 0)){
@@ -404,6 +404,7 @@ int main(){
 				clean_rec_buff();
 				cmd_sent = 0;
 				if(master_mode == 0){
+					set_rec_timeout(0, 10);//(usec, sec)
 					for(i = 0; i < MAX_TRY; i++){
 						memset(recv_str, 0, 50);
 						if(!cmd_sent){
