@@ -1,3 +1,7 @@
+/*AUTHOER:WANGGONG, CHINA
+ *VERSION:1.0
+ *FUNCTION:MASTER
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,8 +17,8 @@
 
 #define MAX_TRY 10
 
-//#define server_ip_1 "192.168.1.216"
-#define server_ip_1 "192.168.1.4"
+#define server_ip_1 "192.168.1.216"
+//#define server_ip_1 "192.168.1.4"
 //#define server_ip_1 "58.214.236.114"
 #define server_ip_2 "192.168.1.116"
 
@@ -33,6 +37,7 @@ static int sockfd;
 static int port, sin_size, recv_sin_len;
 static char mac[6], ip[4], buff[1024];
 static pthread_t keep_connection;
+static char pole_res;
 
 
 int local_net_init(){
@@ -278,6 +283,12 @@ int main(){
 				printf("Get pole request!\n");
 				Send_CMD_TO_SLAVE(GET_REQ, 0x0a);
 			break;
+
+			case CON_ESTAB:
+				pole_res = Ctl_Rec[1];
+				Send_CMD(GET_REQ, 0x14);
+				printf("Pole result = %d.\n", pole_res);
+				break;
 
 			case M_POL_REQ:
 			Send_CMD(GET_REQ, 0x12);

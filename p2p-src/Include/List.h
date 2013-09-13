@@ -1,3 +1,8 @@
+/*AUTHOR:WANGGONG, CHINA
+ *VERSION:1.0
+ *Function:Server
+ */
+
 #ifndef __LIST_H__
 #define __LIST_H__
 
@@ -49,6 +54,7 @@ struct node_net{
 	struct sockaddr_in * recv_sin_s;
 	struct sockaddr_in * local_sin_m;
 	struct sockaddr_in * local_sin_s;
+	int pole_res;
 	int sin_len;
 	
 	struct list_head list;
@@ -119,6 +125,18 @@ struct node_net * find_item(char *name){
 	return NULL;
 }
 
+struct node_net * find_item_by_ip(char *ip, int m){//m=0,master m=1,slave
+	list_for_each(plist, &head){
+		node = list_entry(plist, struct node_net, list);
+	//	printf("%s\n",node->Uname);
+	//	printf("%d\n",node->sin_len);
+		if(strcmp(inet_ntoa(node->local_sin_m->sin_addr), ip) == 0 && m == 0) return node;
+		if(strcmp(inet_ntoa(node->local_sin_s->sin_addr), ip) == 0 && m == 1) return node;
+	}
+
+	return NULL;
+}
+
 int del_item(char *name){
 	list_for_each(plist, &head){
     struct node_net *tmp_node = list_entry(plist, struct node_net, list);
@@ -127,6 +145,10 @@ int del_item(char *name){
 			free(tmp_node->Uname);
 			free(tmp_node->Passwd);
 			free(tmp_node->recv_sin_s);
+			free(tmp_node->recv_sin_m);
+			free(tmp_node->local_sin_s);
+			free(tmp_node->local_sin_m);
+
 			free(tmp_node);
 			return 0;
 		}
@@ -142,6 +164,9 @@ int empty_item(){
 			free(tmp_node->Uname);
 			free(tmp_node->Passwd);
 			free(tmp_node->recv_sin_s);
+			free(tmp_node->recv_sin_m);
+			free(tmp_node->local_sin_s);
+			free(tmp_node->local_sin_m);
 			free(tmp_node);
 	}
 	return list_empty(&head);

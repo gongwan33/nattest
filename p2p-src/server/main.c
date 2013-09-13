@@ -1,3 +1,7 @@
+/*AUTHOR:WANGGONG, CHINA
+ *VERSION:1.0
+ *Function:Server
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,8 +15,8 @@
 
 #define MAX_TRY 10
 #define PORT1 61000
-//#define ip1   "192.168.1.216"
-#define ip1   "192.168.1.4"
+#define ip1   "192.168.1.216"
+//#define ip1   "192.168.1.4"
 //#define ip1   "58.214.236.114"
 #define ip2   "192.168.1.116"
 
@@ -36,8 +40,8 @@ static struct node_net *Peer_Login;
 int local_net_init(){
 	bzero(&sin, sizeof(sin));
 	sin.sin_family = AF_INET;
-	//sin.sin_addr.s_addr = htonl(INADDR_ANY);
-	sin.sin_addr.s_addr = inet_addr(ip1);
+	sin.sin_addr.s_addr = htonl(INADDR_ANY);
+	//sin.sin_addr.s_addr = inet_addr(ip1);
 
 	sin.sin_port = htons(port);
 	sin_len = sizeof(sin);
@@ -80,6 +84,13 @@ void Send_CMD(char Ctl, char res){
 	RESP[0]	= Ctl;
 	RESP[1] = res;
 	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)&recv_sin, recv_sin_len);
+}
+
+void Send_CMD_TO_IP(char Ctl, char res, struct sockaddr_in * s){
+	char RESP[50];
+	RESP[0]	= Ctl;
+	RESP[1] = res;
+	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)s, sizeof(struct sockaddr_in));
 }
 
 int Send_CMD_TO_SLAVE(char Ctl, char * name){
@@ -374,6 +385,10 @@ int main(){
 				int i = 0;
 				int master_mode = 1;
 				int cmd_sent = 0;
+				struct node_net * tmpn;
+
+				tmpn = find_item(Uname);
+
 				set_rec_timeout(0, 10);//(usec, sec)
 				for(i = 0; i < MAX_TRY; i++){
 					memset(recv_str, 0, 50);
@@ -385,11 +400,13 @@ int main(){
 					recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 					if(recv_str[0] == GET_REQ && recv_str[1] == 0x0e){
 						printf("Pole ok! Connection established.\n");
+						tmpn->pole_res = 1;
 						break;
 					}
 					else if(recv_str[0] == GET_REQ && recv_str[1] == 0x0f){
 						printf("Pole failed! Change to slave mode.\n");
 						master_mode = 0;
+						tmpn->pole_res = 0;
 						break;
 					}
 					else if(recv_str[0] == GET_REQ && recv_str[1] == 0x12)
@@ -399,6 +416,7 @@ int main(){
 				if(i >= MAX_TRY){
 						printf("Pole failed! Change to slave mode.\n");
 						master_mode = 0;
+						tmpn->pole_res = 0;
 				}
 				
 				clean_rec_buff();
@@ -416,15 +434,47 @@ int main(){
 						recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 						if(recv_str[0] == GET_REQ && recv_str[1] == 0x10){
 							printf("Pole ok! Connection established.\n");
+							tmpn->pole_res = 1;
 							break;
 						}
 						else if(recv_str[0] == GET_REQ && recv_str[1] == 0x11){
 							printf("Pole failed!\n");
+							tmpn->pole_res = 0;
 							break;
 						}
 						else if(recv_str[0] == GET_REQ && recv_str[1] == 0x13)
 							cmd_sent = 1;
 					}
+				}
+
+				if(i >= MAX_TRY){
+						printf("Pole failed!\n");
+						master_mode = 0;
+						tmpn->pole_res = 0;
+				}
+
+				int res_count = 0;
+				set_rec_timeout(0, 1);//(usec, sec)
+				for(i = 0; i < MAX_TRY; i++){
+					if(tmpn->pole_res == 0){
+						Send_CMD_TO_IP(CON_ESTAB, 2, tmpn->recv_sin_m);
+						Send_CMD_TO_IP(CON_ESTAB, 2, tmpn->recv_sin_s);
+					}
+					else{
+						Send_CMD_TO_IP(CON_ESTAB, 1, tmpn->recv_sin_m);
+						Send_CMD_TO_IP(CON_ESTAB, 1, tmpn->recv_sin_s);
+					}
+					printf("Send connection result(%d) to master and slave.\n", tmpn->pole_res);
+
+					recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+					if(recv_str[0] == GET_REQ && recv_str[1] == 0x14){
+						break;
+					}
+
+				}
+
+				if(i >= MAX_TRY){
+					printf("ERRO: Some node offline!\n");
 				}
 
 				break;
