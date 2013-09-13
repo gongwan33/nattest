@@ -1,6 +1,6 @@
 /*AUTHOR:WANGGONG, CHINA
  *VERSION:1.0
- *Function:Server
+ *Function:LIST HEAD
  */
 
 #ifndef __LIST_H__

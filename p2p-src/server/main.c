@@ -12,6 +12,7 @@
 
 #include <JEANP2PPRO.h>
 #include <List.h>
+#include <DSet.h>
 
 #define MAX_TRY 10
 #define PORT1 61000
@@ -23,7 +24,6 @@
 #define PEER_SHEET_LEN 200
 #define UNAME "wang"
 #define PASSWD "123456"
-
 
 static char pathname[50] = "./natinfo.log";
 static int sfd;
@@ -217,7 +217,9 @@ int main(){
 	int ret = 0;
 	char Get_W;
 	char res;
-	struct sockaddr_in tmp_sin;
+	struct sockaddr_in tmp_sin, *p_sin;
+	int lenth = 0;
+	char priority;
 
 	init_list();
 	
@@ -476,6 +478,20 @@ int main(){
 				if(i >= MAX_TRY){
 					printf("ERRO: Some node offline!\n");
 				}
+
+				break;
+				
+			case TURN_REQ:
+				priority = recv_str[3];
+				lenth = (recv_str[1] << 8) | recv_str[2];
+				if(priority > MAX_TRY) priority = MAX_TRY;
+				if(lenth < 0) lenth = 0;	
+#if PRINT
+				printf("TURN mode. Lenth = %d\n", lenth);
+#endif
+	
+
+//				sendto(sfd, recv_str + 4, lenth, 0, (struct sockaddr *)n);
 
 				break;
 

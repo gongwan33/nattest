@@ -1,3 +1,8 @@
+/*AUTHOR:WANGGONG, CHINA
+ *VERSION:1.0
+ *FUNCTION:PROTOCOL
+ */
+
 //-----------------------------OPCODE DEFINE------------------------------
 #define V_RESP		0x01
 #define V_UAP		0x02
@@ -14,6 +19,7 @@
 #define AV_REQ		0x0d
 #define M_POL_REQ	0x0e
 #define S_POL_REQ	0x0f
+#define TURN_REQ	0x10
 
 #define EXT_CMD		0xff
 
