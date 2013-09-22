@@ -15,9 +15,11 @@
 #include <pthread.h>
 #include <JEANP2PPRO.h>
 
+#define TURN_DATA_SIZE 1024*3
 #define KEEP_CONNECT_PACK 0
 #define MAX_TRY 10
-#define server_ip_1 "192.168.1.216"
+//#define server_ip_1 "192.168.1.216"
+#define server_ip_1 "192.168.1.110"
 //#define server_ip_1 "192.168.1.4"
 //#define server_ip_1 "58.214.236.114"
 #define server_ip_2 "192.168.1.116"
@@ -198,6 +200,7 @@ int main(){
 	char Ctl_Rec[50];
 	char Rec_W;
 	int ret = 0;
+	char Pole_ret = -1;
 	
 	ret = local_net_init();
 	if(ret < 0){
@@ -302,7 +305,7 @@ int main(){
 
 	if(i >= MAX_TRY) return OUT_TRY;
 
-	while(1){
+	while(Pole_ret == -1){
 		set_rec_timeout(0, 0);//(usec, sec)
 		memset(Ctl_Rec, 0, 50);
 		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
@@ -318,6 +321,7 @@ int main(){
 				pole_res = Ctl_Rec[1];
 				Send_CMD(GET_REQ, 0x14);
 				printf("Pole result = %d.\n", pole_res);
+				Pole_ret = pole_res;
 				break;
 
 			case S_POL_REQ:
@@ -344,6 +348,32 @@ int main(){
 			break;	
 
 		}
+	}
+
+/////////////test turn
+	char data[TURN_DATA_SIZE];
+	unsigned int length = 0;
+	char priority;
+	int rec_len = 0;
+	while(1){
+		clean_rec_buff();
+		memset(data, 0, TURN_DATA_SIZE);
+		set_rec_timeout(0, 0);//(usec, sec)
+		rec_len = recvfrom(sockfd, data, sizeof(data), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		printf("rec_len = %d OPCODE = 0x%x\n", rec_len, data[0]);
+
+		switch(data[0]){
+			case TURN_REQ:
+				set_rec_timeout(1, 0);//(usec, sec)
+				length = (data[1] << 8) | data[2];
+				priority = data[3];
+				printf("Get Turn data. Length = %d, priority = %d.\n", length, priority);
+				printf("Data = %s\n", data + 4);
+
+				break;
+		}
+	
+
 	}
 
 	close(sockfd);

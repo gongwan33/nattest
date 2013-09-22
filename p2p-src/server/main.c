@@ -14,11 +14,13 @@
 #include <List.h>
 #include <DSet.h>
 
+#define TURN_DATA_SIZE 1024*3
 #define MAX_TRY 10
 #define PORT1 61000
-#define ip1   "192.168.1.216"
+//#define ip1   "192.168.1.216"
+//#define ip1   "192.168.1.110"
 //#define ip1   "192.168.1.4"
-//#define ip1   "58.214.236.114"
+#define ip1   "58.214.236.114"
 #define ip2   "192.168.1.116"
 
 #define PEER_SHEET_LEN 200
@@ -218,8 +220,10 @@ int main(){
 	char Get_W;
 	char res;
 	struct sockaddr_in tmp_sin, *p_sin;
-	int lenth = 0;
+	struct node_net *p_node;
+	int length = 0;
 	char priority;
+	char data[TURN_DATA_SIZE];
 
 	init_list();
 	
@@ -482,16 +486,42 @@ int main(){
 				break;
 				
 			case TURN_REQ:
-				priority = recv_str[3];
-				lenth = (recv_str[1] << 8) | recv_str[2];
-				if(priority > MAX_TRY) priority = MAX_TRY;
-				if(lenth < 0) lenth = 0;	
-#if PRINT
-				printf("TURN mode. Lenth = %d\n", lenth);
-#endif
-	
+				p_node = find_item_by_ip(inet_ntoa(recv_sin.sin_addr), 1);
+				if(p_node != NULL) 
+					p_sin = p_node->recv_sin_m;
+				if(p_node == NULL)
+					p_node = find_item_by_ip(inet_ntoa(recv_sin.sin_addr), 0);
+				if(p_node == NULL){
+					printf("Node not found. Turn request rejected!\n");
+					break;
+				}
+				else 
+					p_sin = p_node->recv_sin_s;
 
-//				sendto(sfd, recv_str + 4, lenth, 0, (struct sockaddr *)n);
+				priority = recv_str[3];
+				length = (recv_str[1] << 8) | recv_str[2];
+				if(priority > MAX_TRY) priority = MAX_TRY;
+				if(length < 0) length = 0;	
+#if PRINT
+				printf("TURN mode. Length = %d\n", length);
+#endif
+
+				if(length > 46){
+				recvfrom(sfd, data, length - 46 , 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+
+				memcpy(data + 50, data, length - 46);
+				memcpy(data, recv_str, 50);
+
+				if(p_sin != NULL) sendto(sfd, data, length + 4, 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+				else 
+					printf("Erro: node info lost!\n");
+
+				}
+				else{
+					if(p_sin != NULL) sendto(sfd, recv_str, length + 4, 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+					else 
+						printf("Erro: node info lost!\n");
+				}
 
 				break;
 
