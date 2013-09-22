@@ -20,8 +20,8 @@
 //#define ip1   "192.168.1.216"
 //#define ip1   "192.168.1.110"
 //#define ip1   "192.168.1.4"
-#define ip1   "58.214.236.114"
-#define ip2   "192.168.1.116"
+//#define ip1   "58.214.236.114"
+//#define ip2   "192.168.1.116"
 
 #define PEER_SHEET_LEN 200
 #define UNAME "wang"
