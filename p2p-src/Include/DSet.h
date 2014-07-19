@@ -4,6 +4,6 @@
  */
 
 #define PRINT 1
-#define TEST_LOST 1
+#define TEST_LOST 0
 #define LOST_PERCENT 20
 #define TEST_TURN

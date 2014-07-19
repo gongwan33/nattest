@@ -125,17 +125,23 @@ struct node_net * find_item(char *name){
 	return NULL;
 }
 
-struct node_net * find_item_by_ip(char *ip, int* m){//m=0,master m=1,slave
+struct node_net * find_item_by_ip(struct sockaddr_in *ip, int* m){//m=0,master m=1,slave
+	char in_ip[20];
+	char slv[20];
+	char mst[20];
+	sprintf(in_ip, "%s", inet_ntoa(ip->sin_addr));
+	sprintf(slv, "%s", inet_ntoa(node->recv_sin_s->sin_addr));
 	list_for_each(plist, &head){
 		node = list_entry(plist, struct node_net, list);
 	//	printf("%s\n",node->Uname);
-	//	printf("%d\n",node->sin_len);
-		if(strcmp(inet_ntoa(node->local_sin_m->sin_addr), ip) == 0)
+		sprintf(slv, "%s", inet_ntoa(node->recv_sin_s->sin_addr));
+		sprintf(mst, "%s", inet_ntoa(node->recv_sin_m->sin_addr));
+		if(strcmp(mst, in_ip) == 0)
 		{
 			*m = 0;
 		   	return node;
 		}
-		else if(strcmp(inet_ntoa(node->local_sin_s->sin_addr), ip) == 0)
+		else if(strcmp(slv, in_ip) == 0)
 		{
 			*m = 1;
 			return node;
@@ -143,6 +149,16 @@ struct node_net * find_item_by_ip(char *ip, int* m){//m=0,master m=1,slave
 	}
 
 	return NULL;
+}
+
+void printListIp(){
+	list_for_each(plist, &head){
+		node = list_entry(plist, struct node_net, list);
+	     printf("rs %s\n", inet_ntoa(node->recv_sin_s->sin_addr));
+	     printf("ls %s \n", inet_ntoa(node->local_sin_s->sin_addr));
+	     printf("rm %s\n", inet_ntoa(node->recv_sin_m->sin_addr));
+	     printf("lm %s \n", inet_ntoa(node->local_sin_m->sin_addr));
+	}
 }
 
 int del_item(char *name){

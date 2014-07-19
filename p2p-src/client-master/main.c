@@ -24,7 +24,7 @@
 #define MAX_RECV_BUF 1024*1024*10
 
 //#define server_ip_1 "192.168.1.216"
-#define server_ip_1 "192.168.40.131"
+#define server_ip_1 "192.168.1.114"
 //#define server_ip_1 "192.168.1.4"
 //#define server_ip_1 "58.214.236.114"
 
@@ -222,25 +222,12 @@ void clean_rec_buff(){
 	set_rec_timeout(0, 1);//(usec, sec)
 }
 
-void Send_Turn_Dat(char *data, unsigned int len, char priority){
-	char send_buff[SEND_BUFF_SIZE];
-	send_buff[0] = TURN_REQ;
-	
-	send_buff[1] = (len >>  8);
-	send_buff[2] = (len & 0xff);
-
-	send_buff[3] = priority;
-
-	memcpy(send_buff + 4, data, len);
-
-	sendto(sockfd, send_buff, len + 4, 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));	
-}
-
 void sendGet(unsigned int index)
 {
 	struct get_head getSt;
 	memcpy(&getSt, "GET", 3);
     getSt.index = index;
+	getSt.direction = 1;
 
 #if TEST_LOST
 	int rnd = 0;
@@ -273,6 +260,7 @@ void sendRetry(unsigned int index)
 	struct retry_head getSt;
 	memcpy(&getSt, "RTY", 3);
     getSt.index = index;
+	getSt.direction = 1;
 
 #if TEST_LOST
 	int rnd = 0;
@@ -311,6 +299,7 @@ void resend(char *data, int len, u_int32_t index)
 		tLoad.index = index;
 		tLoad.length = 0;
 		tLoad.priority = 0;
+		tLoad.direction = 1;
 		data = (char *)&tLoad;
 	}
 
@@ -808,6 +797,7 @@ int JEAN_send_master(char *data, int len, unsigned char priority, unsigned char 
 	lHead.get_number = getNum;
 	lHead.priority = priority;
 	lHead.length = len;
+	lHead.direction = 1;
 
 	memcpy(buffer, &lHead, sizeof(lHead));
 	memcpy(buffer + sizeof(lHead), data, len);
@@ -944,9 +934,9 @@ int main(){
 		JEAN_send_master(data, sizeof(data), 4, 0);
 		printRingStatus();
 
-//		len = JEAN_recv_master(data, sizeof(data), 1, 0);
-//		if(len > 0)
-//			printf("recv: %s %d\n", data, len);
+//  	len = JEAN_recv_master(data, sizeof(data), 1, 0);
+//  	if(len > 0)
+//  		printf("recv: %s %d\n", data, len);
 
 		i++;
 	}

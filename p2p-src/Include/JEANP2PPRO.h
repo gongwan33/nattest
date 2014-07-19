@@ -19,7 +19,7 @@
 #define AV_REQ		0x0d
 #define M_POL_REQ	0x0e
 #define S_POL_REQ	0x0f
-#define TURN_REQ	'J'
+#define TURN_REQ	0x10
 #define MASTER_QUIT 0x11
 
 #define EXT_CMD		0xff
@@ -45,14 +45,17 @@ struct load_head {
 	u_int32_t get_number;
 	unsigned char priority;
 	u_int64_t length;
+	unsigned char direction;//direction = 0, to master; direction = 1, to slave
 };
 
 struct get_head {
-   char logo[3];
-   u_int32_t index;
+    char logo[3];
+    u_int32_t index;
+    unsigned char direction;//direction = 0, to master; direction = 1, to slave
 };
  
 struct retry_head {
-   char logo[3];
-   u_int32_t index;
+    char logo[3];
+    u_int32_t index;
+    unsigned char direction;//direction = 0, to master; direction = 1, to slave
 };
