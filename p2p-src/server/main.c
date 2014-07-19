@@ -14,11 +14,13 @@
 #include <List.h>
 #include <DSet.h>
 #include <commonkey.h>
+#include <errno.h>
 
-#define MAX_RECV_BUF  1024*1024*10
-#define TURN_DATA_SIZE 1024*3
+#define MAX_RECV_BUF  1024
+#define TURN_DATA_SIZE 1024*1024*10
 #define MAX_TRY 10
 #define PORT1 61000
+#define TURN_PORT 61001
 
 #define PEER_SHEET_LEN 200
 #define UNAME "wang"
@@ -26,15 +28,22 @@
 
 static char pathname[50] = "./natinfo.log";
 static int sfd;
+static int turnSfd;
 static struct sockaddr_in sin, recv_sin;	
+static struct sockaddr_in turn_recv_sin;	
 static int sin_len, recv_sin_len;
 static char *recv_str;
 static int port = PORT1;
 static char Uname[10];
 static char Passwd[10];
+static char turnSign = 0;
+static pthread_t turn_id;
+static char turnThreadRunning = 0;
 
 static int  Peers_Sheet_Index = 0;
 static struct node_net *Peer_Login;
+static char *recvProcessBuf;
+static int recvProcessBufP = 0;
 
 int local_net_init(){
 	bzero(&sin, sizeof(sin));
@@ -220,6 +229,261 @@ void clean_rec_buff(){
 	set_rec_timeout(0, 1);//(usec, sec)
 }
 
+void* turnThread(void *argc)
+{
+	turnThreadRunning = 1;
+	pthread_detach(pthread_self());
+
+	struct sockaddr_in tRecv_sin;	
+	int recvLen;
+	int length;
+	struct sockaddr_in  *p_sin;
+	int tRecv_sin_len;
+	struct node_net *p_node;
+	int optlen;
+	int recv_size;
+	int err;
+
+	printf("---------------Turn thread start----------------\n");
+	recvProcessBufP = 0;
+	recvProcessBuf = (char *)malloc(TURN_DATA_SIZE);
+
+	bzero(&turn_recv_sin, sizeof(turn_recv_sin));
+	turn_recv_sin.sin_family = AF_INET;
+	turn_recv_sin.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	turn_recv_sin.sin_port = htons(TURN_PORT);
+	sin_len = sizeof(turn_recv_sin);
+
+	turnSfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if(!turnSfd)
+	{
+	    turnThreadRunning = 0;
+		return;
+	}
+
+	if(bind(turnSfd, (struct sockaddr *)&turn_recv_sin, sizeof(turn_recv_sin)) != 0){
+		printf("bind erro\n");
+	    turnThreadRunning = 0;
+		return;
+	}	
+
+	printf("turn bind to port [%d]\n", TURN_PORT);
+
+
+	bzero(&tRecv_sin, sizeof(tRecv_sin));
+	tRecv_sin.sin_family = AF_INET;
+	tRecv_sin.sin_addr.s_addr = inet_addr("1.1.1.1");
+	tRecv_sin.sin_port = htons(10000);
+	tRecv_sin_len = sizeof(tRecv_sin);
+
+	optlen = sizeof(recv_size); 
+	err = getsockopt(turnSfd, SOL_SOCKET, SO_RCVBUF, &recv_size, &optlen); 
+	if(err < 0)
+	{ 
+		printf("Fail to get recbuf size\n"); 
+	} 
+
+	while(turnSign == 1)
+	{
+		printf("hello\n");
+		recvLen = recvfrom(turnSfd, recvProcessBuf + recvProcessBufP, TURN_DATA_SIZE, 0, (struct sockaddr *)&tRecv_sin, &tRecv_sin_len);
+
+		if(recvLen <= 0)
+		{
+			//			usleep(100);
+			continue;
+		}
+
+		recvProcessBufP += recvLen;
+
+		if(recvProcessBufP > TURN_DATA_SIZE - recv_size)
+		{
+			printf("recvBuf overflow!!\n");
+			recvProcessBufP = 0;
+		}
+
+		if(recvProcessBufP >= sizeof(struct load_head))
+		{
+			int scanP = 0;
+			struct load_head head;
+			struct get_head get;
+			struct retry_head retry;
+
+			while(scanP + sizeof(struct load_head) < recvProcessBufP)
+			{
+				if(recvProcessBuf[scanP] == 'J' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'A' && recvProcessBuf[scanP + 3] == 'N')
+				{
+					memcpy(&head, recvProcessBuf + scanP, sizeof(struct load_head));
+
+#if PRINT
+					printf("load head: %c %d %d %d %d\n", head.logo[0], head.index, head.get_number, head.priority, (unsigned int)head.length);
+#endif
+					if(recvProcessBufP - scanP - sizeof(struct load_head) >= head.length)
+					{
+						p_node = find_item_by_ip(&tRecv_sin);
+						if(p_node != NULL && head.direction == 0) 
+							p_sin = p_node->recv_sin_m;
+						else if(p_node != NULL && head.direction == 1)
+							p_sin = p_node->recv_sin_s;
+
+						if(p_node == NULL){
+							printf("Node not found. Turn request rejected!\n");
+							break;
+						}
+
+						if(p_sin != NULL) 
+							sendto(turnSfd, recvProcessBuf + scanP, sizeof(struct load_head) + head.length, 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+						else 
+							printf("Erro: node info lost!\n");
+
+
+						scanP = scanP + sizeof(struct load_head) + head.length;
+					}
+					else
+						break;
+				}
+				else if(recvProcessBuf[scanP] == 'G' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'T')
+				{
+					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
+
+					p_node = find_item_by_ip(&tRecv_sin);
+					if(p_node != NULL && get.direction == 0) 
+						p_sin = p_node->recv_sin_m;
+					else if(p_node != NULL && get.direction == 1)
+						p_sin = p_node->recv_sin_s;
+
+					if(p_node == NULL){
+						printf("Node not found. Turn request rejected!\n");
+						break;
+					}
+
+					if(p_sin != NULL) 
+						sendto(turnSfd, recvProcessBuf + scanP, sizeof(struct get_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+					else 
+						printf("Erro: node info lost!\n");
+
+
+					scanP = scanP + sizeof(struct get_head);
+				}
+				else if(recvProcessBuf[scanP] == 'R' && recvProcessBuf[scanP + 1] == 'T' && recvProcessBuf[scanP + 2] == 'Y')
+				{
+					memcpy(&retry, recvProcessBuf + scanP, sizeof(struct retry_head));
+
+					p_node = find_item_by_ip(&tRecv_sin);
+					if(p_node != NULL && retry.direction == 0) 
+						p_sin = p_node->recv_sin_m;
+					else if(p_node != NULL && retry.direction == 1)
+						p_sin = p_node->recv_sin_s;
+
+					if(p_node == NULL){
+						printf("Node not found. Turn request rejected!\n");
+						break;
+					}
+
+					if(p_sin != NULL) 
+						sendto(turnSfd, recvProcessBuf + scanP, sizeof(struct retry_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+					else 
+						printf("Erro: node info lost!\n");
+
+
+					scanP = scanP + sizeof(struct retry_head);
+				}
+
+				else
+					scanP++;
+			}
+
+			if(scanP == recvProcessBufP)
+			{
+				recvProcessBufP = 0;
+				continue;
+			}
+			else if(scanP < recvProcessBufP)
+			{
+				recvProcessBufP -= scanP;
+				memcpy(recvProcessBuf, recvProcessBuf + scanP, recvProcessBufP);
+			}
+		}
+		else if(recvProcessBufP >= sizeof(struct get_head))
+		{
+			int scanP = 0;
+			struct get_head get;
+			struct retry_head retry;
+
+			while(scanP + sizeof(struct get_head) <= recvProcessBufP)
+			{
+				if(recvProcessBuf[scanP] == 'G' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'T')
+				{
+					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
+
+					p_node = find_item_by_ip(&tRecv_sin);
+					if(p_node != NULL && get.direction == 0) 
+						p_sin = p_node->recv_sin_m;
+					else if(p_node != NULL && get.direction == 1)
+						p_sin = p_node->recv_sin_s;
+
+					if(p_node == NULL){
+						printf("Node not found. Turn request rejected!\n");
+						break;
+					}
+
+					if(p_sin != NULL) 
+						sendto(turnSfd, recvProcessBuf + scanP, sizeof(struct get_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+					else 
+						printf("Erro: node info lost!\n");
+
+					scanP = scanP + sizeof(struct get_head);
+				}
+				else if(recvProcessBuf[scanP] == 'R' && recvProcessBuf[scanP + 1] == 'T' && recvProcessBuf[scanP + 2] == 'Y')
+				{
+					memcpy(&retry, recvProcessBuf + scanP, sizeof(struct retry_head));
+
+					p_node = find_item_by_ip(&tRecv_sin);
+					if(p_node != NULL && retry.direction == 0) 
+						p_sin = p_node->recv_sin_m;
+					else if(p_node != NULL && retry.direction == 1)
+						p_sin = p_node->recv_sin_s;
+
+					if(p_node == NULL){
+						printf("Node not found. Turn request rejected!\n");
+						break;
+					}
+
+					if(p_sin != NULL) 
+						sendto(turnSfd, recvProcessBuf + scanP, sizeof(struct retry_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+					else 
+						printf("Erro: node info lost!\n");
+
+
+					scanP = scanP + sizeof(struct retry_head);
+				}
+
+				else
+					scanP++;
+			}
+
+			if(scanP == recvProcessBufP)
+			{
+				recvProcessBufP = 0;
+				continue;
+			}
+			else if(scanP < recvProcessBufP)
+			{
+				recvProcessBufP -= scanP;
+				memcpy(recvProcessBuf, recvProcessBuf + scanP, recvProcessBufP);
+			}
+
+		}
+
+	}
+
+	free(recvProcessBuf);
+	close(turnSfd);
+
+	turnThreadRunning = 0;
+}
+
 int main(){
 	int ret = 0;
 	char Get_W;
@@ -229,7 +493,6 @@ int main(){
 	struct load_head turnHead;
 	int length = 0;
 	char priority;
-	char data[TURN_DATA_SIZE];
 	unsigned int recvLen = 0;
 
 	init_list();
@@ -283,11 +546,13 @@ int main(){
 					if(Find_Peer(Uname) == 0){
 						if(Peers_Sheet_Index < PEER_SHEET_LEN){
 							ret = Peer_Set(Uname, Passwd, &recv_sin, &tmp_sin);
+							printf("rec: %s local: %s\n", inet_ntoa(recv_sin.sin_addr), inet_ntoa(tmp_sin.sin_addr));
 							if(ret < 0){
 								printf("Set peer failed!\n");
 								return ret;
 							}
 
+							printListIp();
 							Peers_Sheet_Index++;
 							Insert_Success = 1;
 							printf("Registor success!! Now index at %d\n", Peers_Sheet_Index);
@@ -340,12 +605,14 @@ int main(){
 					if(Find_Success){
 						Send_CMD(GET_REQ, 0x4);
 						printf("Send response.\n");
+						printf("rec: %s local: %s\n", inet_ntoa(recv_sin.sin_addr), inet_ntoa(tmp_sin.sin_addr));
 						ret = Peer_Set_Slave(Uname, &recv_sin, &tmp_sin);
 						if(ret < 0){
 							printf("Login sheet is broken!\n");
 							return LOGIN_SHEET_BROKEN;
 						}
 							
+						printListIp();
 						Send_S_IP(Uname);
 					}
 					else{
@@ -390,6 +657,7 @@ int main(){
 				break;
 
 			case MASTER_QUIT:
+				turnSign = 0;
 				memset(Uname, 0, 10);
 				sscanf(recv_str, "%c %s", &Get_W, Uname);
 
@@ -511,43 +779,19 @@ int main(){
 				break;
 				
 			case TURN_REQ:
-				if(recv_str[1] == 'E' && recv_str[2] == 'A' && recv_str[3] == 'N')
-				{
-					int m;
-					p_node = find_item_by_ip(inet_ntoa(recv_sin.sin_addr), &m);
-					if(p_node != NULL && m == 1) 
-						p_sin = p_node->recv_sin_m;
-					else if(p_node != NULL && m ==0)
-						p_sin = p_node->recv_sin_s;
-					    
-					if(p_node == NULL){
-						printf("Node not found. Turn request rejected!\n");
-						break;
-					}
-
-#if PRINT
-					printf("TURN mode. Length = %d, master = %d\n", recvLen, m);
-#endif
-
-					if(length >= 0){
-						if(p_sin != NULL) 
-							sendto(sfd, recv_str, recvLen, 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
-						else 
-							printf("Erro: node info lost!\n");
-
-					}
-					else{
-						if(p_sin != NULL) 
-							sendto(sfd, recv_str, recvLen, 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
-						else 
-							printf("Erro: node info lost!\n");
-					}
-				}
+				Send_CMD(GET_REQ, 0x1);
+				turnSign = 1;
+				printf("Entering turn thread!\n");
+				recvProcessBufP = 0;
+				if(turnThreadRunning == 0)
+					pthread_create(&turn_id, NULL, turnThread, NULL);
+				printf("%d\n", (int)turn_id);
 				break;
 
 		}
 	}
 
+	turnSign = 0;
 	free(recv_str);
 	empty_item();
 	close(sfd);

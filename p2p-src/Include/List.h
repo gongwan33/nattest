@@ -125,7 +125,7 @@ struct node_net * find_item(char *name){
 	return NULL;
 }
 
-struct node_net * find_item_by_ip(struct sockaddr_in *ip, int* m){//m=0,master m=1,slave
+struct node_net * find_item_by_ip(struct sockaddr_in *ip){
 	char in_ip[20];
 	char slv[20];
 	char mst[20];
@@ -138,12 +138,10 @@ struct node_net * find_item_by_ip(struct sockaddr_in *ip, int* m){//m=0,master m
 		sprintf(mst, "%s", inet_ntoa(node->recv_sin_m->sin_addr));
 		if(strcmp(mst, in_ip) == 0)
 		{
-			*m = 0;
 		   	return node;
 		}
 		else if(strcmp(slv, in_ip) == 0)
 		{
-			*m = 1;
 			return node;
 		}
 	}
