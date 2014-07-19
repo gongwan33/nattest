@@ -26,7 +26,7 @@
 #define TURN_DATA_SIZE 1024*3
 #define KEEP_CONNECT_PACK 0
 //#define server_ip_1 "192.168.1.216"
-#define server_ip_1 "192.168.40.131"
+#define server_ip_1 "192.168.1.114"
 //#define server_ip_1 "192.168.1.4"
 //#define server_ip_1 "58.214.236.114"
 
@@ -35,10 +35,11 @@
 
 #define ACT_NETCARD "eth0"
 #define server_port 61000
+#define server_turn_port 61001
 #define local_port 6788
 
 static char recvSign;
-static struct sockaddr_in servaddr1, local_addr, recv_sin, master_sin, host_sin;
+static struct sockaddr_in servaddr1, local_addr, recv_sin, master_sin, host_sin, turnaddr;
 static struct ifreq ifr, *pifr;
 static struct ifconf ifc;
 static char ip_info[50];
@@ -58,6 +59,7 @@ static pthread_mutex_t recvBuf_lock;
 static unsigned int recvBufP;
 static unsigned int recvProcessBufP;
 static unsigned int recvProcessBackBufP;
+static char recvThreadRunning = 0;
 
 unsigned char connectionStatus = FAIL;
 
@@ -147,6 +149,15 @@ int set_ip1_struct(char * ip1, int port){
 		return -1;
 	}
 
+	memset(&turnaddr, 0, sizeof(turnaddr));
+	turnaddr.sin_family = AF_INET;
+	turnaddr.sin_port = htons(server_turn_port);
+	
+	if( inet_pton(AF_INET, ip1, &turnaddr.sin_addr) <= 0){
+		printf("inet_pton error for %s\n",ip1);
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -156,6 +167,20 @@ int set_rec_timeout(int usec, int sec){
     tv_out.tv_usec = usec;
 
 	setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,&tv_out, sizeof(tv_out));
+}
+
+int Send_TURN(){
+	char Sen_W;
+	Sen_W = TURN_REQ;
+	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
+
+	ip_info[0] = Sen_W;
+	memcpy(ip_info + 1, USERNAME, 10);
+	memcpy(ip_info + 12, PASSWD, 10);
+	memcpy(ip_info + 34, &host_sin, sizeof(struct sockaddr_in));
+
+	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	return 0;
 }
 
 int Send_VUAPS(){
@@ -224,6 +249,7 @@ void sendGet(unsigned int index)
 
 	memcpy(&getSt, "GET", 3);
 	getSt.index = index;
+	getSt.direction = 0;
 
 #if TEST_LOST
 	int rnd = 0;
@@ -242,7 +268,7 @@ void sendGet(unsigned int index)
 	}
 	else if(connectionStatus == TURN)
 	{
-		sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	    sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&turnaddr, sizeof(turnaddr));
 	}
 #if TEST_LOST
 	}
@@ -255,6 +281,7 @@ void sendRetry(unsigned int index)
 	struct retry_head getSt;
 	memcpy(&getSt, "RTY", 3);
     getSt.index = index;
+    getSt.direction = 0;
 
 //    printf("retry %d\n", index);
 #if TEST_LOST
@@ -270,11 +297,11 @@ void sendRetry(unsigned int index)
 
     if(connectionStatus == P2P)
 	{
-	    sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
+	    sendto(sockfd, &getSt, sizeof(struct retry_head), 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
 	}
 	else if(connectionStatus == TURN)
 	{
-	    sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	    sendto(sockfd, &getSt, sizeof(struct retry_head), 0, (struct sockaddr *)&turnaddr, sizeof(turnaddr));
 	}
 
 #if TEST_LOST
@@ -294,6 +321,7 @@ void resend(char *data, int len, u_int32_t index)
 		tLoad.index = index;
 		tLoad.length = 0;
 		tLoad.priority = 0;
+		tLoad.direction = 0;
 		data = (char *)&tLoad;
 	}
 
@@ -314,7 +342,7 @@ void resend(char *data, int len, u_int32_t index)
 	}
 	else if(connectionStatus == TURN)
 	{
-	    sendto(sockfd, data, len + sizeof(struct load_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	    sendto(sockfd, data, len + sizeof(struct load_head), 0, (struct sockaddr *)&turnaddr, sizeof(turnaddr));
 	}
 
 #if TEST_LOST
@@ -357,6 +385,8 @@ int findIndexInBuf(char *buf, int *start, int *end, int *datLen, u_int32_t index
 
 void* recvData(void *argc)
 {
+	recvThreadRunning = 1;
+
 	int recvLen = 0;
 	int recv_size = 0;
 	int err = 0;
@@ -640,6 +670,7 @@ void* recvData(void *argc)
 //		usleep(100);
 	}
 
+	recvThreadRunning = 0;
 
 }
 
@@ -784,9 +815,25 @@ int JEAN_init_slave(int setServerPort, int setLocalPort, char *setIp)
 					connectionStatus = P2P;
 				else
 #endif
+				{
+					int i = 0;
 					connectionStatus = TURN;
+					for(i = 0; i < MAX_TRY + 1 ; i++){
+						printf("send turn \n");
+						Send_TURN();
+						char result = 0;
 
-				pthread_create(&recvDat_id, NULL, recvData, NULL);
+						recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+						if(Ctl_Rec[0] == GET_REQ) 
+							break;
+					}
+
+					if(i >= MAX_TRY + 1) return OUT_TRY;
+
+				}
+
+				if(recvThreadRunning == 0)
+					pthread_create(&recvDat_id, NULL, recvData, NULL);
 				break;
 
 			case S_POL_REQ:
@@ -829,6 +876,7 @@ int JEAN_send_slave(char *data, int len, unsigned char priority, unsigned char v
 	lHead.get_number = getNum;
 	lHead.priority = priority;
 	lHead.length = len;
+	lHead.direction = 0;
 
 	memcpy(buffer, &lHead, sizeof(lHead));
 	memcpy(buffer + sizeof(lHead), data, len);
@@ -850,7 +898,7 @@ int JEAN_send_slave(char *data, int len, unsigned char priority, unsigned char v
 	}
 	else if(connectionStatus == TURN)
 	{
-	    sendLen = sendto(sockfd, buffer, len + sizeof(lHead), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	    sendLen = sendto(sockfd, buffer, len + sizeof(lHead), 0, (struct sockaddr *)&turnaddr, sizeof(turnaddr));
 	}
 	else 
 	{
@@ -928,8 +976,8 @@ int main(){
 		if(len > 0)
 			printf("recv: %s %d\n", data, len);
 
-//		JEAN_send_slave(data, sizeof(data), 1, 0);
-//		printRingStatus();
+		JEAN_send_slave(data, sizeof(data), 1, 0);
+		printRingStatus();
 		usleep(1000);
 		i++;
 	}
