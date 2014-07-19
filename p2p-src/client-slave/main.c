@@ -409,7 +409,6 @@ int init_CMD_CHAN()
 	bzero(&pin,sizeof(pin));
 	pin.sin_family = AF_INET;
 	pin.sin_addr.s_addr = inet_addr(server_ip_1);
-	pin.sin_addr.s_addr = htonl(INADDR_ANY);
 	pin.sin_port = htons(server_cmd_port);
 
 	if((cmdfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
