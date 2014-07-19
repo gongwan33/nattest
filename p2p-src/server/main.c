@@ -286,7 +286,6 @@ void* turnThread(void *argc)
 
 	while(turnSign == 1)
 	{
-		printf("hello\n");
 		recvLen = recvfrom(turnSfd, recvProcessBuf + recvProcessBufP, TURN_DATA_SIZE, 0, (struct sockaddr *)&tRecv_sin, &tRecv_sin_len);
 
 		if(recvLen <= 0)
