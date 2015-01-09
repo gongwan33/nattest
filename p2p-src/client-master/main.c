@@ -153,6 +153,20 @@ int Send_VUAP(){
 	return 0;
 }
 
+int Send_CLOSE(){
+	char Sen_W;
+	Sen_W = MASTER_QUIT;
+	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
+
+	ip_info[0] = Sen_W;
+	memcpy(ip_info + 1, USERNAME, 10);
+	memcpy(ip_info + 12, PASSWD, 10);
+	memcpy(ip_info + 34, &host_sin, sizeof(struct sockaddr_in));
+
+	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	return 0;
+}
+
 void Send_POL(char req,struct sockaddr_in * sock){
 	ip_info[0] = req;
 	sendto(sockfd, ip_info, 2, 0, (struct sockaddr *)sock, sizeof(struct sockaddr_in));
@@ -369,6 +383,25 @@ int JEAN_recv_master(char *data, int len, unsigned char priority, unsigned char 
     return recvLen;
 }
 
+int JEAN_close_master()
+{
+	int i = 0;
+	char Ctl_Rec[50];
+	clean_rec_buff();
+	for(i = 0; i < MAX_TRY + 1 ; i++){
+		Send_CLOSE();
+		char result = 0;
+
+		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		if(Ctl_Rec[0] == GET_REQ) break;
+	}
+
+	if(i >= MAX_TRY + 1) return OUT_TRY;
+
+	close(sockfd);
+	return 0;
+}
+
 int main(){
     int ret = -1;
 
@@ -377,6 +410,6 @@ int main(){
 		return ret;
 
 //	Send_Turn_Dat("hello slave", 12, 1);
-	close(sockfd);
+    JEAN_close_master();
 	return 0;
 }

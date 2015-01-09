@@ -199,7 +199,7 @@ void clean_rec_buff(){
 	set_rec_timeout(0, 1);//(usec, sec)
 }
 
-int JEAN_init(int setServerPort, int setLocalPort, char *setIp)
+int JEAN_init_slave(int setServerPort, int setLocalPort, char *setIp)
 {
 	int ret = 0;	
 	int  i;
@@ -388,10 +388,16 @@ int JEAN_recv_slave(char *data, int len, unsigned char priority, unsigned char v
     return recvLen;
 }
 
+int JEAN_close_slave()
+{
+	close(sockfd);
+	return 0;
+}
+
 int main(){
 	int ret = 0;
 	
-    ret = JEAN_init(server_port, local_port, server_ip_1);
+    ret = JEAN_init_slave(server_port, local_port, server_ip_1);
 	if(ret < 0)
 		return ret;
 
@@ -422,6 +428,6 @@ int main(){
 //
 //	}
 //
-	close(sockfd);
+	JEAN_close_slave();
 	return 0;
 }

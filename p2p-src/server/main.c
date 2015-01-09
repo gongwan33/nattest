@@ -384,6 +384,22 @@ int main(){
 				}
 				break;
 
+			case MASTER_QUIT:
+				memset(Uname, 0, 10);
+				sscanf(recv_str, "%c %s", &Get_W, Uname);
+
+				if(0 == del_item(Uname))
+				{
+					Send_CMD(GET_REQ, 0x1);
+					printf("Node Deleted.\n");
+				}
+				else
+				{
+					Send_CMD(GET_REQ, 0x1);
+					printf("Node Deleted.\n");
+				}
+				break;
+
 			case POL_SENT:
 				memset(Uname, 0, 10);
 				memcpy(Uname, recv_str + 1, 10);
