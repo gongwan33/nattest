@@ -14,15 +14,15 @@
 #include <net/if.h>
 #include <pthread.h>
 #include <JEANP2PPRO.h>
+#include <commonkey.h>
 
 #define TURN_DATA_SIZE 1024*3
 #define KEEP_CONNECT_PACK 0
 #define MAX_TRY 10
 //#define server_ip_1 "192.168.1.216"
-#define server_ip_1 "192.168.1.110"
+#define server_ip_1 "192.168.40.131"
 //#define server_ip_1 "192.168.1.4"
 //#define server_ip_1 "58.214.236.114"
-#define server_ip_2 "192.168.1.116"
 
 #define USERNAME "wang"
 #define PASSWD "123456"
@@ -41,11 +41,15 @@ static char mac[6], ip[4], buff[1024];
 static pthread_t keep_connection;
 static char pole_res;
 
-int local_net_init(){
+unsigned char connectionStatus = FAIL;
+
+int commonKey = 0;
+
+int local_net_init(int localPort){
 	memset(&local_addr, 0, sizeof(local_addr));
 	local_addr.sin_family = AF_INET;
 	local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	local_addr.sin_port = htons(local_port);
+	local_addr.sin_port = htons(localPort);
 
 	if((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
 		printf("create socket error: %s(errno: %d)\n", strerror(errno),errno);
@@ -195,14 +199,15 @@ void clean_rec_buff(){
 	set_rec_timeout(0, 1);//(usec, sec)
 }
 
-int main(){
+int JEAN_init(int setServerPort, int setLocalPort, char *setIp)
+{
+	int ret = 0;	
 	int  i;
 	char Ctl_Rec[50];
 	char Rec_W;
-	int ret = 0;
 	char Pole_ret = -1;
-	
-	ret = local_net_init();
+
+	ret = local_net_init(setLocalPort);
 	if(ret < 0){
 		printf("Local bind failed!!%d\n", ret);
 		return ret;
@@ -214,7 +219,7 @@ int main(){
 		return ret;
 	}
 
-	ret = set_ip1_struct(server_ip_1, server_port);
+	ret = set_ip1_struct(setIp, setServerPort);
 	if(ret < 0){
 		printf("Set ip1 failed!!%d\n", ret);
 		return ret;
@@ -319,9 +324,14 @@ int main(){
 
 			case CON_ESTAB:
 				pole_res = Ctl_Rec[1];
+//				commonKey = (Ctl_Rec[2] | (Ctl_Rec[3]<<8) | (Ctl_Rec[4]<<16) | (Ctl_Rec[5]<<24));
 				Send_CMD(GET_REQ, 0x14);
-				printf("Pole result = %d.\n", pole_res);
+//				printf("Pole result = %d, key = 0x%x.\n", pole_res, commonKey);
 				Pole_ret = pole_res;
+				if(Pole_ret == 1)
+					connectionStatus = P2P;
+				else
+					connectionStatus = TURN;
 				break;
 
 			case S_POL_REQ:
@@ -350,32 +360,68 @@ int main(){
 		}
 	}
 
+}
+
+int JEAN_send_slave(char *data, int len, unsigned char priority, unsigned char video_analyse)
+{
+	int sendLen = 0;
+    if(connectionStatus == P2P)
+	    sendLen = sendto(sockfd, data, len, 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
+	else if(connectionStatus == TURN)
+	    sendLen = sendto(sockfd, data, len, 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	else 
+		return NO_CONNECTION; 
+
+    return sendLen;
+}
+
+int JEAN_recv_slave(char *data, int len, unsigned char priority, unsigned char video_analyse)
+{
+	int recvLen = 0;
+    if(connectionStatus == P2P)
+		recvLen = recvfrom(sockfd, data, len, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+	else if(connectionStatus == TURN)
+		recvLen = recvfrom(sockfd, data, len, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+	else 
+		return NO_CONNECTION; 
+
+    return recvLen;
+}
+
+int main(){
+	int ret = 0;
+	
+    ret = JEAN_init(server_port, local_port, server_ip_1);
+	if(ret < 0)
+		return ret;
+
+
 /////////////test turn
 	char data[TURN_DATA_SIZE];
 	unsigned int length = 0;
 	char priority;
 	int rec_len = 0;
-	while(1){
-		clean_rec_buff();
-		memset(data, 0, TURN_DATA_SIZE);
-		set_rec_timeout(0, 0);//(usec, sec)
-		rec_len = recvfrom(sockfd, data, sizeof(data), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-		printf("rec_len = %d OPCODE = 0x%x\n", rec_len, data[0]);
-
-		switch(data[0]){
-			case TURN_REQ:
-				set_rec_timeout(1, 0);//(usec, sec)
-				length = (data[1] << 8) | data[2];
-				priority = data[3];
-				printf("Get Turn data. Length = %d, priority = %d.\n", length, priority);
-				printf("Data = %s\n", data + 4);
-
-				break;
-		}
-	
-
-	}
-
+//	while(1){
+//		clean_rec_buff();
+//		memset(data, 0, TURN_DATA_SIZE);
+//		set_rec_timeout(0, 0);//(usec, sec)
+//		rec_len = recvfrom(sockfd, data, sizeof(data), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+//		printf("rec_len = %d OPCODE = 0x%x\n", rec_len, data[0]);
+//
+//		switch(data[0]){
+//			case TURN_REQ:
+//				set_rec_timeout(1, 0);//(usec, sec)
+//				length = (data[1] << 8) | data[2];
+//				priority = data[3];
+//				printf("Get Turn data. Length = %d, priority = %d.\n", length, priority);
+//				printf("Data = %s\n", data + 4);
+//
+//				break;
+//		}
+//	
+//
+//	}
+//
 	close(sockfd);
 	return 0;
 }

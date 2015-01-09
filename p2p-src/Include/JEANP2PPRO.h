@@ -23,6 +23,11 @@
 
 #define EXT_CMD		0xff
 
+//--------------------------Connection Status-----------------------------
+#define P2P         0x01
+#define TURN        0x02
+#define FAIL        0x03
+
 //-----------------------------ERROR RETURN-------------------------------
 #define WRONG_VERIFY			-50
 #define WRONG_REG				-51
@@ -30,3 +35,4 @@
 #define NO_NODE					-53
 #define INIT_PEER_LOGIN_FAIL	-54
 #define LOGIN_SHEET_BROKEN		-55
+#define NO_CONNECTION           -56

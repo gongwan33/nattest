@@ -13,15 +13,11 @@
 #include <JEANP2PPRO.h>
 #include <List.h>
 #include <DSet.h>
+#include <commonkey.h>
 
 #define TURN_DATA_SIZE 1024*3
 #define MAX_TRY 10
 #define PORT1 61000
-//#define ip1   "192.168.1.216"
-//#define ip1   "192.168.1.110"
-//#define ip1   "192.168.1.4"
-//#define ip1   "58.214.236.114"
-//#define ip2   "192.168.1.116"
 
 #define PEER_SHEET_LEN 200
 #define UNAME "wang"
@@ -92,6 +88,14 @@ void Send_CMD_TO_IP(char Ctl, char res, struct sockaddr_in * s){
 	char RESP[50];
 	RESP[0]	= Ctl;
 	RESP[1] = res;
+//	if(res == 1)
+//	{
+//        RESP[2] = COMMON_KEY_1 & 0xff;  
+//		RESP[3] = (COMMON_KEY_1>>8) & 0xff;
+//		RESP[4] = (COMMON_KEY_1>>16) & 0xff;
+//		RESP[5] = (COMMON_KEY_1>>24) & 0xff;
+//	    printf("commonkey establish: 0x%x\n", (RESP[2] | (RESP[3]<<8) | (RESP[4]<<16) | (RESP[5]<<24)));
+//	}
 	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)s, sizeof(struct sockaddr_in));
 }
 
