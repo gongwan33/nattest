@@ -366,7 +366,7 @@ int JEAN_send_slave(char *data, int len, unsigned char priority, unsigned char v
 {
 	int sendLen = 0;
     if(connectionStatus == P2P)
-	    sendLen = sendto(sockfd, data, len, 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
+	    sendLen = sendto(sockfd, data, len, 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
 	else if(connectionStatus == TURN)
 	    sendLen = sendto(sockfd, data, len, 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	else 
