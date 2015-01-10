@@ -15,9 +15,12 @@
 #include <pthread.h>
 #include <JEANP2PPRO.h>
 #include <commonkey.h>
+#include <ring.h>
 
 #define MAX_TRY 10
 #define SEND_BUFF_SIZE 1024*3
+#define MAX_RECEIVE 1024*1024
+#define MAX_RECV_BUF 1024*1024*10
 
 //#define server_ip_1 "192.168.1.216"
 #define server_ip_1 "192.168.40.131"
@@ -31,6 +34,7 @@
 #define server_port 61000
 #define local_port 6888
 
+static char recvSign;
 static struct sockaddr_in servaddr1, local_addr, recv_sin, slave_sin, host_sin;
 static struct ifreq ifr, *pifr;
 static struct ifconf ifc;
@@ -40,10 +44,16 @@ static int port, sin_size, recv_sin_len;
 static char mac[6], ip[4], buff[1024];
 static pthread_t keep_connection;
 static char pole_res;
+static unsigned int sendIndex;
+static unsigned int getNum;
+static unsigned int sendNum;
+static char* recvBuf;
+static pthread_t recvDat_id;
+static unsigned int recvBufP;
 
 int commonKey = 0;
 
-static unsigned char connectionStatus;
+static unsigned char connectionStatus = FAIL;
 
 int local_net_init(int port){
 	memset(&local_addr, 0, sizeof(local_addr));
@@ -218,6 +228,67 @@ void Send_Turn_Dat(char *data, unsigned int len, char priority){
 	sendto(sockfd, send_buff, len + 4, 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));	
 }
 
+void sendGet(unsigned int index)
+{
+	char buf[7] = {'G','E','T'};
+	buf[3] = index & 0xff;
+	buf[4] = (index>>8) & 0xff;
+	buf[5] = (index>>16) & 0xff;
+	buf[6] = (index>>24) & 0xff;
+
+    if(connectionStatus == P2P)
+	{
+	    sendto(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
+	}
+	else if(connectionStatus == TURN)
+	{
+	    sendto(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	}
+}
+
+void* recvData(void *argc)
+{
+	int recvLen = 0;
+	pthread_detach(pthread_self());
+
+	while(recvSign)
+	{
+		recvLen = 0;
+		if(connectionStatus == P2P)
+		{
+			recvLen = recvfrom(sockfd, recvBuf + recvBufP, MAX_RECEIVE, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		}
+		else if(connectionStatus == TURN)
+		{
+			recvLen = recvfrom(sockfd, recvBuf + recvBufP, MAX_RECEIVE, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		}
+		else 
+			break;
+
+		if(recvBuf[recvBufP] == 'J' && recvBuf[recvBufP + 1] == 'E' && recvBuf[recvBufP + 2] == 'A' && recvBuf[recvBufP + 3] == 'N')
+		{
+			int indexGet = 0;
+			indexGet = (indexGet | recvBuf[recvBufP + 4] | recvBuf[recvBufP + 5]<<8 | recvBuf[recvBufP + 6]<<16 | recvBuf[recvBufP + 7]<<24);
+			printf("get %d\n", indexGet);
+			sendGet(indexGet);
+		}
+		else if(recvBuf[recvBufP] == 'G' && recvBuf[recvBufP + 1] == 'E' && recvBuf[recvBufP + 2] == 'T')
+		{
+			int indexGet = 0;
+			indexGet = (indexGet | recvBuf[recvBufP + 3] | recvBuf[recvBufP + 4]<<8 | recvBuf[recvBufP + 5]<<16 | recvBuf[recvBufP + 6]<<24);
+			unreg_buff(indexGet);
+		}
+
+
+		recvBufP += recvLen;
+		if(recvBufP > MAX_RECV_BUF)
+			recvBufP = 0;
+
+	    getNum += recvLen;
+	}
+
+}
+
 int JEAN_init_master(int serverPort, int localPort, char *setIp)
 {
 	int  i;
@@ -225,7 +296,11 @@ int JEAN_init_master(int serverPort, int localPort, char *setIp)
 	char Rec_W;
 	int ret = 0;
 	char Pole_ret = -1;
-	
+    
+	recvSign = 1;
+    recvBuf = (char*)malloc(MAX_RECV_BUF);
+
+    initRing();	
 	ret = local_net_init(localPort);
 	if(ret < 0){
 		printf("Local bind failed!!%d\n", ret);
@@ -330,6 +405,7 @@ int JEAN_init_master(int serverPort, int localPort, char *setIp)
 				else
 					connectionStatus = TURN;
 
+				pthread_create(&recvDat_id, NULL, recvData, NULL);
 				break;
 
 			case M_POL_REQ:
@@ -360,12 +436,33 @@ int JEAN_init_master(int serverPort, int localPort, char *setIp)
 int JEAN_send_master(char *data, int len, unsigned char priority, unsigned char video_analyse)
 {
 	int sendLen = 0;
+    char *buffer;
+	struct load_head lHead;
+
+	buffer = (char *)malloc(len + sizeof(struct load_head));
+	memcpy(lHead.logo, "JEAN", 4);
+	lHead.index = sendIndex;
+	lHead.get_number = getNum;
+	lHead.length = len;
+
+	memcpy(buffer, &lHead, sizeof(lHead));
+	memcpy(buffer + sizeof(lHead), data, len);
     if(connectionStatus == P2P)
-	    sendLen = sendto(sockfd, data, len, 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
+	{
+	    sendLen = sendto(sockfd, buffer, len + sizeof(lHead), 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
+	}
 	else if(connectionStatus == TURN)
-	    sendLen = sendto(sockfd, data, len, 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	{
+	    sendLen = sendto(sockfd, buffer, len + sizeof(lHead), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	}
 	else 
+	{
 		return NO_CONNECTION; 
+	}
+
+	reg_buff(sendIndex, buffer);
+	sendIndex++;
+    sendNum += sendLen;
 
     return sendLen;
 }
@@ -373,12 +470,20 @@ int JEAN_send_master(char *data, int len, unsigned char priority, unsigned char 
 int JEAN_recv_master(char *data, int len, unsigned char priority, unsigned char video_analyse)
 {
 	int recvLen = 0;
-    if(connectionStatus == P2P)
-		recvLen = recvfrom(sockfd, data, len, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-	else if(connectionStatus == TURN)
-		recvLen = recvfrom(sockfd, data, len, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-	else 
-		return NO_CONNECTION; 
+
+	if(recvBufP < len)
+	{
+		memcpy(data, recvBuf, recvBufP);
+		recvLen = recvBufP;
+		recvBufP = 0;
+	}
+	else
+	{
+		memcpy(data, recvBuf, len);
+		recvLen = len;
+        memcpy(recvBuf, recvBuf + len, recvBufP - len);
+	}
+
 
     return recvLen;
 }
@@ -387,29 +492,42 @@ int JEAN_close_master()
 {
 	int i = 0;
 	char Ctl_Rec[50];
+
+	recvSign = 0;
 	clean_rec_buff();
+	sleep(1);
 	for(i = 0; i < MAX_TRY + 1 ; i++){
+		printf("send close \n");
 		Send_CLOSE();
 		char result = 0;
 
 		recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-		if(Ctl_Rec[0] == GET_REQ) break;
+		if(Ctl_Rec[0] == GET_REQ) 
+			break;
 	}
 
 	if(i >= MAX_TRY + 1) return OUT_TRY;
 
+	free(recvBuf);
+	emptyRing();
 	close(sockfd);
 	return 0;
 }
 
 int main(){
     int ret = -1;
+	char data[10] = "test";
 
 	ret = JEAN_init_master(server_port, local_port, server_ip_1);
 	if(ret < 0)
 		return ret;
 
-//	Send_Turn_Dat("hello slave", 12, 1);
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+	sleep(1);
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+
     JEAN_close_master();
 	return 0;
 }

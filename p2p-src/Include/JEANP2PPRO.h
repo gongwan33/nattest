@@ -37,3 +37,11 @@
 #define INIT_PEER_LOGIN_FAIL	-54
 #define LOGIN_SHEET_BROKEN		-55
 #define NO_CONNECTION           -56
+
+
+struct load_head {
+	char logo[4];
+    unsigned int index;
+	unsigned int get_number;
+	unsigned long length;
+};
