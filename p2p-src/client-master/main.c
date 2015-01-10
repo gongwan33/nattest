@@ -443,6 +443,7 @@ int JEAN_send_master(char *data, int len, unsigned char priority, unsigned char 
 	memcpy(lHead.logo, "JEAN", 4);
 	lHead.index = sendIndex;
 	lHead.get_number = getNum;
+	lHead.priority = priority;
 	lHead.length = len;
 
 	memcpy(buffer, &lHead, sizeof(lHead));

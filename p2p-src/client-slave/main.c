@@ -54,6 +54,7 @@ static char* recvProcessBuf;
 static pthread_t recvDat_id;
 static pthread_mutex_t recvBuf_lock;
 static unsigned int recvBufP;
+static unsigned int recvProcessBufP;
 
 unsigned char connectionStatus = FAIL;
 
@@ -236,26 +237,36 @@ void sendGet(unsigned int index)
 void* recvData(void *argc)
 {
 	int recvLen = 0;
-	int lenAdd = 0;
+	int recv_size = 0;
+	int err = 0;
+	socklen_t optlen = 0;
+
 	pthread_detach(pthread_self());
+
 	recvBufP = 0;
+	recvProcessBufP = 0;
+
+	optlen = sizeof(recv_size); 
+	err = getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &recv_size, &optlen); 
+	if(err < 0)
+	{ 
+		printf("Fail to get recbuf size\n"); 
+	} 
 
 	set_rec_timeout(10, 0);//(usec, sec)
 	while(recvSign)
 	{
 		recvLen = 0;
-		pthread_mutex_lock(&recvBuf_lock);
 		if(connectionStatus == P2P)
 		{
-			recvLen = recvfrom(sockfd, recvBuf + recvBufP, MAX_RECEIVE, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+			recvLen = recvfrom(sockfd, recvProcessBuf + recvProcessBufP, MAX_RECEIVE, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		}
 		else if(connectionStatus == TURN)
 		{
-			recvLen = recvfrom(sockfd, recvBuf + recvBufP, MAX_RECEIVE, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+			recvLen = recvfrom(sockfd, recvProcessBuf + recvProcessBufP, MAX_RECEIVE, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		}
 		else 
 			break;
-		pthread_mutex_unlock(&recvBuf_lock);
 
 		if(recvLen == -1)
 		{
@@ -263,40 +274,51 @@ void* recvData(void *argc)
 			continue;
 		}
 
-	    if(recvLen < 8 && lenAdd < 8)
-			lenAdd += recvLen;
-		else
-			lenAdd = 0;
-
-		if(recvBuf[recvBufP] == 'J' && recvBuf[recvBufP + 1] == 'E' && recvBuf[recvBufP + 2] == 'A' && recvBuf[recvBufP + 3] == 'N')
-		{
-			int indexGet = 0;
-			indexGet = (indexGet | recvBuf[recvBufP + 4] | recvBuf[recvBufP + 5]<<8 | recvBuf[recvBufP + 6]<<16 | recvBuf[recvBufP + 7]<<24);
-			printf("get %d\n", indexGet);
-			sendGet(indexGet);
-		}
-		else if(lenAdd >= 8)
-		{
-			int tempLen = recvBufP;
-			while(tempLen)
-			{
-				if(recvBuf[tempLen - 3] == 'J' && recvBuf[tempLen - 2] == 'E' && recvBuf[tempLen - 1] == 'A' && recvBuf[tempLen] == 'N')
-				{
-					int indexGet = 0;
-					indexGet = (indexGet | recvBuf[tempLen + 1] | recvBuf[tempLen + 2]<<8 | recvBuf[tempLen + 3]<<16 | recvBuf[tempLen + 4]<<24);
-					printf("get %d\n", indexGet);
-					sendGet(indexGet);
-				}
-
-				tempLen--;
-			}
-		}
-
-		recvBufP += recvLen;
-		if(recvBufP > MAX_RECV_BUF)
-			recvBufP = 0;
-
 	    getNum += recvLen;
+		recvProcessBufP += recvLen;
+
+		if(recvProcessBufP > MAX_RECV_BUF - recv_size)
+		{
+			printf("recvBuf overflow!!\n");
+			recvProcessBufP = 0;
+		}
+
+	    if(recvProcessBufP > sizeof(struct load_head))
+		{
+			int scanP = 0;
+			struct load_head head;
+
+			while(scanP < recvProcessBufP)
+			{
+				if(recvProcessBuf[scanP] == 'J' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'A' && recvProcessBuf[scanP + 3] == 'N')
+				{
+					memcpy(&head, recvProcessBuf + scanP, sizeof(struct load_head));
+					sendGet(head.index);
+					printf("load head: %c %d %d %d %d\n", head.logo[0], head.index, head.get_number, head.priority, (unsigned int)head.length);
+					if(recvProcessBufP - scanP - sizeof(struct load_head) >= head.length)
+					{
+						if(recvBufP + head.length > MAX_RECV_BUF)
+						{
+							printf("recv processed buf overflow!!\n");
+							recvBufP = 0;
+						}
+						pthread_mutex_lock(&recvBuf_lock);
+						memcpy(recvBuf + recvBufP, recvProcessBuf + scanP + sizeof(struct load_head), head.length);
+						recvBufP += head.length;
+						pthread_mutex_unlock(&recvBuf_lock);
+						unreg_buff(head.index);
+						scanP = scanP + sizeof(struct load_head) + head.length;
+					}
+					else
+						break;
+				}
+				else
+					scanP++;
+			}
+			if(scanP >= recvProcessBufP)
+				recvProcessBufP = 0;
+		}
+
 		usleep(100);
 	}
 
