@@ -46,3 +46,8 @@ struct load_head {
 	unsigned char priority;
 	unsigned long length;
 };
+
+struct get_head {
+   char logo[3];
+   unsigned int index;
+};

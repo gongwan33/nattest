@@ -217,22 +217,21 @@ void clean_rec_buff(){
 
 void sendGet(unsigned int index)
 {
-	char buf[7] = {'G','E','T'};
-	buf[3] = index & 0xff;
-	buf[4] = (index>>8) & 0xff;
-	buf[5] = (index>>16) & 0xff;
-	buf[6] = (index>>24) & 0xff;
+	struct get_head getSt;
 
-    if(connectionStatus == P2P)
+	memcpy(&getSt, "GET", 3);
+	getSt.index = index;
+
+	if(connectionStatus == P2P)
 	{
-	    sendto(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
+		sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
 	}
 	else if(connectionStatus == TURN)
 	{
-	    sendto(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+		sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	}
-}
 
+}
 
 void* recvData(void *argc)
 {
@@ -253,7 +252,7 @@ void* recvData(void *argc)
 		printf("Fail to get recbuf size\n"); 
 	} 
 
-	set_rec_timeout(10, 0);//(usec, sec)
+	set_rec_timeout(1, 0);//(usec, sec)
 	while(recvSign)
 	{
 		recvLen = 0;
@@ -268,9 +267,9 @@ void* recvData(void *argc)
 		else 
 			break;
 
-		if(recvLen == -1)
+		if(recvLen <= 0)
 		{
-			usleep(100);
+//			usleep(100);
 			continue;
 		}
 
@@ -287,8 +286,9 @@ void* recvData(void *argc)
 		{
 			int scanP = 0;
 			struct load_head head;
+			struct get_head get;
 
-			while(scanP < recvProcessBufP)
+			while(scanP + sizeof(struct load_head) < recvProcessBufP)
 			{
 				if(recvProcessBuf[scanP] == 'J' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'A' && recvProcessBuf[scanP + 3] == 'N')
 				{
@@ -297,6 +297,8 @@ void* recvData(void *argc)
 					printf("load head: %c %d %d %d %d\n", head.logo[0], head.index, head.get_number, head.priority, (unsigned int)head.length);
 					if(recvProcessBufP - scanP - sizeof(struct load_head) >= head.length)
 					{
+						if(head.priority > 0)
+							sendGet(head.index);
 						if(recvBufP + head.length > MAX_RECV_BUF)
 						{
 							printf("recv processed buf overflow!!\n");
@@ -306,21 +308,66 @@ void* recvData(void *argc)
 						memcpy(recvBuf + recvBufP, recvProcessBuf + scanP + sizeof(struct load_head), head.length);
 						recvBufP += head.length;
 						pthread_mutex_unlock(&recvBuf_lock);
-						unreg_buff(head.index);
 						scanP = scanP + sizeof(struct load_head) + head.length;
 					}
 					else
 						break;
 				}
+				else if(recvProcessBuf[scanP] == 'G' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'T')
+				{
+					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
+					printf("get index: %d\n", get.index);
+					unreg_buff(get.index);
+					scanP = scanP + sizeof(struct get_head);
+				}
 				else
 					scanP++;
 			}
-			if(scanP >= recvProcessBufP)
+
+			if(scanP == recvProcessBufP)
+			{
 				recvProcessBufP = 0;
+				continue;
+			}
+			else if(scanP < recvProcessBufP)
+			{
+				recvProcessBufP -= scanP;
+				memcpy(recvProcessBuf, recvProcessBuf + scanP, recvProcessBufP);
+			}
+		}
+		else if(recvProcessBufP >= sizeof(struct get_head))
+		{
+			int scanP = 0;
+			struct get_head get;
+
+			while(scanP + sizeof(struct get_head) <= recvProcessBufP)
+			{
+				if(recvProcessBuf[scanP] == 'G' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'T')
+				{
+					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
+					unreg_buff(get.index);
+					scanP = scanP + sizeof(struct get_head);
+				}
+				else
+					scanP++;
+			}
+
+			if(scanP == recvProcessBufP)
+			{
+				recvProcessBufP = 0;
+				continue;
+			}
+			else if(scanP < recvProcessBufP)
+			{
+				recvProcessBufP -= scanP;
+				memcpy(recvProcessBuf, recvProcessBuf + scanP, recvProcessBufP);
+			}
+
 		}
 
-		usleep(100);
+//		usleep(100);
 	}
+
 
 }
 
@@ -499,22 +546,35 @@ int JEAN_send_slave(char *data, int len, unsigned char priority, unsigned char v
 {
 	int sendLen = 0;
     char *buffer;
+	struct load_head lHead;
+
 	buffer = (char *)malloc(len + sizeof(struct load_head));
+	memcpy(lHead.logo, "JEAN", 4);
+	lHead.index = sendIndex;
+	lHead.get_number = getNum;
+	lHead.priority = priority;
+	lHead.length = len;
+
+	memcpy(buffer, &lHead, sizeof(lHead));
+	memcpy(buffer + sizeof(lHead), data, len);
     if(connectionStatus == P2P)
 	{
-	    sendLen = sendto(sockfd, data, len, 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
+	    sendLen = sendto(sockfd, buffer, len + sizeof(lHead), 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
 	}
 	else if(connectionStatus == TURN)
 	{
-	    sendLen = sendto(sockfd, data, len, 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	    sendLen = sendto(sockfd, buffer, len + sizeof(lHead), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	}
-	else
+	else 
 	{
-		free(buffer);
 		return NO_CONNECTION; 
 	}
 
-	free(buffer);
+	if(priority > 0)
+		reg_buff(sendIndex, buffer);
+	sendIndex++;
+    sendNum += sendLen;
+
     return sendLen;
 }
 
@@ -532,6 +592,7 @@ int JEAN_recv_slave(char *data, int len, unsigned char priority, unsigned char v
 	if(recvBufP == 0)
 		return 0;
 
+	pthread_mutex_lock(&recvBuf_lock);
 	if(recvBufP < len)
 	{
 		memcpy(data, recvBuf, recvBufP);
@@ -542,14 +603,10 @@ int JEAN_recv_slave(char *data, int len, unsigned char priority, unsigned char v
 	{
 		memcpy(data, recvBuf, len);
 		recvLen = len;
-
-		pthread_mutex_lock(&recvBuf_lock);
         memcpy(recvBuf, recvBuf + len, recvBufP - len);
-		pthread_mutex_unlock(&recvBuf_lock);
-
 		recvBufP -= len;
 	}
-
+	pthread_mutex_unlock(&recvBuf_lock);
     return recvLen;
 }
 
@@ -566,7 +623,7 @@ int JEAN_close_slave()
 
 int main(){
 	int ret = 0;
-	char data[20];
+	char data[10];
 	int len;
 	
     ret = JEAN_init_slave(server_port, local_port, server_ip_1);
@@ -574,11 +631,28 @@ int main(){
 		return ret;
 
     len = JEAN_recv_slave(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data + 8, len);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_slave(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+	len = JEAN_recv_slave(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_slave(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_slave(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_slave(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_slave(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_slave(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_slave(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+
 
 	usleep(1500000);
     len = JEAN_recv_slave(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data + 8, len);
+	printf("recv: %s %d\n", data, len);
 
 	JEAN_close_slave();
 	return 0;

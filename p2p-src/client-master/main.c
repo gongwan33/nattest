@@ -48,9 +48,13 @@ static unsigned int sendIndex;
 static unsigned int getNum;
 static unsigned int sendNum;
 static char* recvBuf;
+static char* recvProcessBuf;
 static pthread_t recvDat_id;
+static pthread_mutex_t recvBuf_lock;
 static unsigned int recvBufP;
+static unsigned int recvProcessBufP;
 
+int JEAN_recv_timeout = 1000;//1s
 int commonKey = 0;
 
 static unsigned char connectionStatus = FAIL;
@@ -205,7 +209,7 @@ void *Keep_con(){
 
 void clean_rec_buff(){
 	char tmp[50];
-	int ret;
+	int ret = 1;
 	set_rec_timeout(100000, 0);//(usec, sec)
 	while(ret > 0){
 		ret = recvfrom(sockfd, tmp, 10, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
@@ -230,61 +234,154 @@ void Send_Turn_Dat(char *data, unsigned int len, char priority){
 
 void sendGet(unsigned int index)
 {
-	char buf[7] = {'G','E','T'};
-	buf[3] = index & 0xff;
-	buf[4] = (index>>8) & 0xff;
-	buf[5] = (index>>16) & 0xff;
-	buf[6] = (index>>24) & 0xff;
+	struct get_head getSt;
+	memcpy(&getSt, "GET", 3);
+    getSt.index = index;
 
     if(connectionStatus == P2P)
 	{
-	    sendto(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
+	    sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
 	}
 	else if(connectionStatus == TURN)
 	{
-	    sendto(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	    sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	}
+
 }
 
 void* recvData(void *argc)
 {
 	int recvLen = 0;
+	int recv_size = 0;
+	int err = 0;
+	socklen_t optlen = 0;
+
 	pthread_detach(pthread_self());
 
+	recvBufP = 0;
+	recvProcessBufP = 0;
+
+	optlen = sizeof(recv_size); 
+	err = getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &recv_size, &optlen); 
+	if(err < 0)
+	{ 
+		printf("Fail to get recbuf size\n"); 
+	} 
+
+//	set_rec_timeout(10, 0);//(usec, sec)
 	while(recvSign)
 	{
 		recvLen = 0;
 		if(connectionStatus == P2P)
 		{
-			recvLen = recvfrom(sockfd, recvBuf + recvBufP, MAX_RECEIVE, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+			recvLen = recvfrom(sockfd, recvProcessBuf + recvProcessBufP, MAX_RECEIVE, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		}
 		else if(connectionStatus == TURN)
 		{
-			recvLen = recvfrom(sockfd, recvBuf + recvBufP, MAX_RECEIVE, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+			recvLen = recvfrom(sockfd, recvProcessBuf + recvProcessBufP, MAX_RECEIVE, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		}
 		else 
 			break;
 
-		if(recvBuf[recvBufP] == 'J' && recvBuf[recvBufP + 1] == 'E' && recvBuf[recvBufP + 2] == 'A' && recvBuf[recvBufP + 3] == 'N')
+		if(recvLen <= 0)
 		{
-			int indexGet = 0;
-			indexGet = (indexGet | recvBuf[recvBufP + 4] | recvBuf[recvBufP + 5]<<8 | recvBuf[recvBufP + 6]<<16 | recvBuf[recvBufP + 7]<<24);
-			printf("get %d\n", indexGet);
-			sendGet(indexGet);
+//			usleep(100);
+			continue;
 		}
-		else if(recvBuf[recvBufP] == 'G' && recvBuf[recvBufP + 1] == 'E' && recvBuf[recvBufP + 2] == 'T')
-		{
-			int indexGet = 0;
-			indexGet = (indexGet | recvBuf[recvBufP + 3] | recvBuf[recvBufP + 4]<<8 | recvBuf[recvBufP + 5]<<16 | recvBuf[recvBufP + 6]<<24);
-			unreg_buff(indexGet);
-		}
-
-
-		recvBufP += recvLen;
-		if(recvBufP > MAX_RECV_BUF)
-			recvBufP = 0;
 
 	    getNum += recvLen;
+		recvProcessBufP += recvLen;
+
+		if(recvProcessBufP > MAX_RECV_BUF - recv_size)
+		{
+			printf("recvBuf overflow!!\n");
+			recvProcessBufP = 0;
+		}
+
+	    if(recvProcessBufP > sizeof(struct load_head))
+		{
+			int scanP = 0;
+			struct load_head head;
+			struct get_head get;
+
+			while(scanP + sizeof(struct load_head) < recvProcessBufP)
+			{
+				if(recvProcessBuf[scanP] == 'J' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'A' && recvProcessBuf[scanP + 3] == 'N')
+				{
+					memcpy(&head, recvProcessBuf + scanP, sizeof(struct load_head));
+					sendGet(head.index);
+					printf("load head: %c %d %d %d %d\n", head.logo[0], head.index, head.get_number, head.priority, (unsigned int)head.length);
+					if(recvProcessBufP - scanP - sizeof(struct load_head) >= head.length)
+					{
+						if(recvBufP + head.length > MAX_RECV_BUF)
+						{
+							printf("recv processed buf overflow!!\n");
+							recvBufP = 0;
+						}
+						pthread_mutex_lock(&recvBuf_lock);
+						memcpy(recvBuf + recvBufP, recvProcessBuf + scanP + sizeof(struct load_head), head.length);
+						recvBufP += head.length;
+						pthread_mutex_unlock(&recvBuf_lock);
+						if(head.priority > 0)
+							sendGet(head.index);
+						scanP = scanP + sizeof(struct load_head) + head.length;
+					}
+					else
+						break;
+				}
+				else if(recvProcessBuf[scanP] == 'G' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'T')
+				{
+					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
+					printf("get index: %d\n", get.index);
+					unreg_buff(get.index);
+					scanP = scanP + sizeof(struct get_head);
+				}
+				else
+					scanP++;
+			}
+
+			if(scanP == recvProcessBufP)
+			{
+				recvProcessBufP = 0;
+				continue;
+			}
+			else if(scanP < recvProcessBufP)
+			{
+				recvProcessBufP -= scanP;
+				memcpy(recvProcessBuf, recvProcessBuf + scanP, recvProcessBufP);
+			}
+		}
+		else if(recvProcessBufP >= sizeof(struct get_head))
+		{
+			int scanP = 0;
+			struct get_head get;
+
+			while(scanP + sizeof(struct get_head) <= recvProcessBufP)
+			{
+				if(recvProcessBuf[scanP] == 'G' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'T')
+				{
+					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
+					unreg_buff(get.index);
+					scanP = scanP + sizeof(struct get_head);
+				}
+				else
+					scanP++;
+			}
+
+			if(scanP == recvProcessBufP)
+			{
+				recvProcessBufP = 0;
+				continue;
+			}
+			else if(scanP < recvProcessBufP)
+			{
+				recvProcessBufP -= scanP;
+				memcpy(recvProcessBuf, recvProcessBuf + scanP, recvProcessBufP);
+			}
+
+		}
+
+//		usleep(100);
 	}
 
 }
@@ -299,6 +396,7 @@ int JEAN_init_master(int serverPort, int localPort, char *setIp)
     
 	recvSign = 1;
     recvBuf = (char*)malloc(MAX_RECV_BUF);
+    recvProcessBuf = (char*)malloc(MAX_RECV_BUF);
 
     initRing();	
 	ret = local_net_init(localPort);
@@ -461,7 +559,8 @@ int JEAN_send_master(char *data, int len, unsigned char priority, unsigned char 
 		return NO_CONNECTION; 
 	}
 
-	reg_buff(sendIndex, buffer);
+	if(priority > 0)
+		reg_buff(sendIndex, buffer);
 	sendIndex++;
     sendNum += sendLen;
 
@@ -471,6 +570,16 @@ int JEAN_send_master(char *data, int len, unsigned char priority, unsigned char 
 int JEAN_recv_master(char *data, int len, unsigned char priority, unsigned char video_analyse)
 {
 	int recvLen = 0;
+    unsigned long int waitTime = 0;
+
+	while(recvBufP == 0 && waitTime < JEAN_recv_timeout * 10)
+	{
+		usleep(10);
+		waitTime += 10;
+	}
+
+	if(recvBufP == 0)
+		return 0;
 
 	if(recvBufP < len)
 	{
@@ -482,9 +591,13 @@ int JEAN_recv_master(char *data, int len, unsigned char priority, unsigned char 
 	{
 		memcpy(data, recvBuf, len);
 		recvLen = len;
-        memcpy(recvBuf, recvBuf + len, recvBufP - len);
-	}
 
+		pthread_mutex_lock(&recvBuf_lock);
+        memcpy(recvBuf, recvBuf + len, recvBufP - len);
+		pthread_mutex_unlock(&recvBuf_lock);
+
+		recvBufP -= len;
+	}
 
     return recvLen;
 }
@@ -497,6 +610,7 @@ int JEAN_close_master()
 	recvSign = 0;
 	clean_rec_buff();
 	sleep(1);
+	set_rec_timeout(0, 1);//(usec, sec)
 	for(i = 0; i < MAX_TRY + 1 ; i++){
 		printf("send close \n");
 		Send_CLOSE();
@@ -510,6 +624,7 @@ int JEAN_close_master()
 	if(i >= MAX_TRY + 1) return OUT_TRY;
 
 	free(recvBuf);
+	free(recvProcessBuf);
 	emptyRing();
 	close(sockfd);
 	return 0;
@@ -525,7 +640,25 @@ int main(){
 
     JEAN_send_master(data, sizeof(data), 1, 0);
 	printRingStatus();
+
+	memcpy(data, "test1", 6);
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+	memcpy(data, "test2", 6);
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+	memcpy(data, "test3", 6);
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+
 	sleep(1);
+  
+	JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
     JEAN_send_master(data, sizeof(data), 1, 0);
 	printRingStatus();
 

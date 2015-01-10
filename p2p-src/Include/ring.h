@@ -86,7 +86,6 @@ int reg_buff(unsigned int index, char *pointer)
 	int times = 0;
     int pos = 0;
 
-	pthread_mutex_lock(&ring);
 	pos = getEmpPos();
 	while(pos == -1 && times < TRY_MAX_TIMES)
 	{
@@ -95,6 +94,7 @@ int reg_buff(unsigned int index, char *pointer)
 		times++;
 	}
 
+	pthread_mutex_lock(&ring);
 	if(times >= TRY_MAX_TIMES)
 		emptyRing();
 
@@ -110,7 +110,6 @@ int reg_buff(unsigned int index, char *pointer)
 int unreg_buff(unsigned int index)
 {
 	int pos = 0;
-	pthread_mutex_lock(&ring);
 	pos = getIndexPos(index);
 
 	printf("pos: %d\n", pos);
@@ -119,6 +118,8 @@ int unreg_buff(unsigned int index)
 		return -1;
 
 	free(buf_list[pos].pointer);
+
+	pthread_mutex_lock(&ring);
     empty_list[pos] = -1;
 	pthread_mutex_unlock(&ring);
 	return 0;
