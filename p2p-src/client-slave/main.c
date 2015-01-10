@@ -258,7 +258,10 @@ void* recvData(void *argc)
 		pthread_mutex_unlock(&recvBuf_lock);
 
 		if(recvLen == -1)
+		{
+			usleep(100);
 			continue;
+		}
 
 	    if(recvLen < 8 && lenAdd < 8)
 			lenAdd += recvLen;
@@ -294,7 +297,6 @@ void* recvData(void *argc)
 			recvBufP = 0;
 
 	    getNum += recvLen;
-
 		usleep(100);
 	}
 
