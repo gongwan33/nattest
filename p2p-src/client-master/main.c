@@ -560,7 +560,7 @@ int JEAN_send_master(char *data, int len, unsigned char priority, unsigned char 
 	}
 
 	if(priority > 0)
-		reg_buff(sendIndex, buffer);
+		reg_buff(sendIndex, buffer, priority);
 	sendIndex++;
     sendNum += sendLen;
 
@@ -632,6 +632,7 @@ int JEAN_close_master()
 
 int main(){
     int ret = -1;
+	int len = 0;
 	char data[10] = "test";
 
 	ret = JEAN_init_master(server_port, local_port, server_ip_1);
@@ -651,7 +652,7 @@ int main(){
     JEAN_send_master(data, sizeof(data), 1, 0);
 	printRingStatus();
 
-	sleep(1);
+	//sleep(1);
   
 	JEAN_send_master(data, sizeof(data), 1, 0);
 	printRingStatus();
@@ -661,6 +662,42 @@ int main(){
 	printRingStatus();
     JEAN_send_master(data, sizeof(data), 1, 0);
 	printRingStatus();
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+    JEAN_send_master(data, sizeof(data), 1, 0);
+	printRingStatus();
+
+	sleep(1);
+    len = JEAN_recv_master(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_master(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+	len = JEAN_recv_master(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_master(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_master(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_master(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_master(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_master(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+    len = JEAN_recv_master(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+
+
+	usleep(1500000);
+    len = JEAN_recv_master(data, sizeof(data), 1, 0);
+	printf("recv: %s %d\n", data, len);
+
 
     JEAN_close_master();
 	return 0;

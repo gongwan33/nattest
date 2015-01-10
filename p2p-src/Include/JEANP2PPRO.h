@@ -41,13 +41,13 @@
 
 struct load_head {
 	char logo[4];
-    unsigned int index;
-	unsigned int get_number;
+    u_int32_t index;
+	u_int32_t get_number;
 	unsigned char priority;
-	unsigned long length;
+	u_int64_t length;
 };
 
 struct get_head {
    char logo[3];
-   unsigned int index;
+   u_int32_t index;
 };

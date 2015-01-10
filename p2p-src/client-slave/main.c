@@ -571,7 +571,7 @@ int JEAN_send_slave(char *data, int len, unsigned char priority, unsigned char v
 	}
 
 	if(priority > 0)
-		reg_buff(sendIndex, buffer);
+		reg_buff(sendIndex, buffer, priority);
 	sendIndex++;
     sendNum += sendLen;
 
@@ -653,6 +653,30 @@ int main(){
 	usleep(1500000);
     len = JEAN_recv_slave(data, sizeof(data), 1, 0);
 	printf("recv: %s %d\n", data, len);
+
+    JEAN_send_slave(data, sizeof(data), 1, 0);
+	printRingStatus();
+
+	memcpy(data, "test1", 6);
+    JEAN_send_slave(data, sizeof(data), 1, 0);
+	printRingStatus();
+	memcpy(data, "test2", 6);
+    JEAN_send_slave(data, sizeof(data), 1, 0);
+	printRingStatus();
+	memcpy(data, "test3", 6);
+    JEAN_send_slave(data, sizeof(data), 1, 0);
+	printRingStatus();
+
+	sleep(1);
+  
+	JEAN_send_slave(data, sizeof(data), 1, 0);
+	printRingStatus();
+    JEAN_send_slave(data, sizeof(data), 1, 0);
+	printRingStatus();
+    JEAN_send_slave(data, sizeof(data), 1, 0);
+	printRingStatus();
+    JEAN_send_slave(data, sizeof(data), 1, 0);
+	printRingStatus();
 
 	JEAN_close_slave();
 	return 0;

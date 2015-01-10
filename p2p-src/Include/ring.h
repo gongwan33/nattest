@@ -7,9 +7,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 void initRing();
-int reg_buff(unsigned int index, char *pointer);
+int reg_buff(unsigned int index, char *pointer, unsigned char priority);
 int unreg_buff(unsigned int index);
 void emptyRing();
 void printRingStatus();
@@ -17,7 +18,9 @@ void printRingStatus();
 struct buf_node
 {
     unsigned int index;
+	unsigned char priority;
     char *pointer;
+    struct timeval tv;
 };
 
 static pthread_mutex_t ring;
@@ -62,8 +65,12 @@ void emptyRing()
 int getEmpPos()
 {
 	int i = 0;
+	struct timeval cur_tv;
+	gettimeofday(&cur_tv, NULL);
 	for(i = 0; i < RING_LEN; i++)
 	{
+		if(cur_tv.tv_sec*1000000 + cur_tv.tv_usec - buf_list[i].tv.tv_sec*1000000 - buf_list[i].tv.tv_usec > 35000000*buf_list[i].priority)
+			empty_list[i] = -1;
         if(empty_list[i] == -1)
 			return i;
 	}
@@ -81,7 +88,7 @@ int getIndexPos(unsigned int index)
 	return -1;
 }
 
-int reg_buff(unsigned int index, char *pointer)
+int reg_buff(unsigned int index, char *pointer, unsigned char priority)
 {
 	int times = 0;
     int pos = 0;
@@ -96,11 +103,16 @@ int reg_buff(unsigned int index, char *pointer)
 
 	pthread_mutex_lock(&ring);
 	if(times >= TRY_MAX_TIMES)
+	{
+		printf("ring over flow!!");
 		emptyRing();
+	}
 
 	pos = getEmpPos();
     buf_list[pos].index = index;
     buf_list[pos].pointer = pointer;
+    buf_list[pos].priority = priority;
+    gettimeofday(&buf_list[pos].tv, NULL);
     empty_list[pos] = 1;
 
 	pthread_mutex_unlock(&ring);
@@ -112,7 +124,7 @@ int unreg_buff(unsigned int index)
 	int pos = 0;
 	pos = getIndexPos(index);
 
-	printf("pos: %d\n", pos);
+//	printf("pos: %d\n", pos);
 
 	if(pos == -1)
 		return -1;
