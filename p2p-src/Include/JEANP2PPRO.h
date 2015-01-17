@@ -51,3 +51,8 @@ struct get_head {
    char logo[3];
    u_int32_t index;
 };
+ 
+struct retry_head {
+   char logo[3];
+   u_int32_t index;
+};

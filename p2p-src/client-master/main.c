@@ -16,6 +16,7 @@
 #include <JEANP2PPRO.h>
 #include <commonkey.h>
 #include <ring.h>
+#include <DSet.h>
 
 #define MAX_TRY 10
 #define SEND_BUFF_SIZE 1024*3
@@ -49,13 +50,17 @@ static unsigned int getNum;
 static unsigned int sendNum;
 static char* recvBuf;
 static char* recvProcessBuf;
+static char* recvProcessBackBuf;
 static pthread_t recvDat_id;
 static pthread_mutex_t recvBuf_lock;
 static unsigned int recvBufP;
 static unsigned int recvProcessBufP;
+static unsigned int recvProcessBackBufP;
 
 int JEAN_recv_timeout = 1000;//1s
 int commonKey = 0;
+
+static sendDelaySign = 0;
 
 static unsigned char connectionStatus = FAIL;
 
@@ -249,12 +254,61 @@ void sendGet(unsigned int index)
 
 }
 
+void sendRetry(unsigned int index)
+{
+	struct retry_head getSt;
+	memcpy(&getSt, "RTY", 3);
+    getSt.index = index;
+
+    if(connectionStatus == P2P)
+	{
+	    sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
+	}
+	else if(connectionStatus == TURN)
+	{
+	    sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	}
+
+}
+
+void resend(char *data, int len, u_int32_t index)
+{
+	struct load_head tLoad;
+
+	sendDelaySign = 1;
+	memset(&tLoad, 0, sizeof(struct load_head));
+	if(len == 0 || data == 0)
+	{
+		memcpy(&tLoad.logo, "JEAN", 4);
+		tLoad.index = index;
+		tLoad.length = 0;
+		tLoad.priority = 0;
+		data = (char *)&tLoad;
+	}
+
+    if(connectionStatus == P2P)
+	{
+	    sendto(sockfd, data, len + sizeof(struct load_head), 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
+	}
+	else if(connectionStatus == TURN)
+	{
+	    sendto(sockfd, data, len + sizeof(struct load_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	}
+
+}
+
+
 void* recvData(void *argc)
 {
 	int recvLen = 0;
 	int recv_size = 0;
 	int err = 0;
 	socklen_t optlen = 0;
+	char *retryData;
+	u_int32_t lastIndex = 0;
+	int pauseSign = 0;
+	int recordLostNum = 0;
+	int getLostNum = 0;
 
 	pthread_detach(pthread_self());
 
@@ -268,7 +322,7 @@ void* recvData(void *argc)
 		printf("Fail to get recbuf size\n"); 
 	} 
 
-//	set_rec_timeout(10, 0);//(usec, sec)
+	set_rec_timeout(1, 0);//(usec, sec)
 	while(recvSign)
 	{
 		recvLen = 0;
@@ -298,21 +352,78 @@ void* recvData(void *argc)
 			recvProcessBufP = 0;
 		}
 
+		if(pauseSign == 0)
+		{
+			recordLostNum = 0;
+			getLostNum = 0;
+		}
+
+		if(getLostNum >= recordLostNum - 1)
+			pauseSign = 0;
+
+		if(pauseSign == 0 && recvProcessBackBufP > 0)
+		{
+			memcpy(recvProcessBuf + recvProcessBufP, recvProcessBackBuf, recvProcessBackBufP);
+			recvProcessBackBufP = 0;
+		}
+
 	    if(recvProcessBufP > sizeof(struct load_head))
 		{
 			int scanP = 0;
 			struct load_head head;
 			struct get_head get;
+			struct retry_head retry;
 
 			while(scanP + sizeof(struct load_head) < recvProcessBufP)
 			{
 				if(recvProcessBuf[scanP] == 'J' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'A' && recvProcessBuf[scanP + 3] == 'N')
 				{
+					int lostNum = 0;
 					memcpy(&head, recvProcessBuf + scanP, sizeof(struct load_head));
+					lostNum = head.index - lastIndex;
+
+					if(lostNum <= 0 && head.index != 0)
+						break;
+
+					if(pauseSign == 1 && lostNum == 1)
+						getLostNum++;
+
+					if(head.index != 0 && lostNum > 1)
+					{
+#if PRINT
+						printf("lost pack happen, reget!!\n");
+#endif
+                        int i = 0;
+						pauseSign = 1;
+						for(i = 1;i < lostNum; i++)
+						{
+							sendRetry(lastIndex + i);
+						}
+						memcpy(recvProcessBackBuf + recvProcessBackBufP, recvProcessBuf + scanP, recvProcessBufP - scanP);
+						recvProcessBufP = 0;
+						recvProcessBackBufP += recvProcessBufP - scanP;
+	
+						if(lostNum > recordLostNum)
+							recordLostNum = lostNum;
+
+						break;
+					}
+					lastIndex = head.index;
+
 					sendGet(head.index);
 					printf("load head: %c %d %d %d %d\n", head.logo[0], head.index, head.get_number, head.priority, (unsigned int)head.length);
 					if(recvProcessBufP - scanP - sizeof(struct load_head) >= head.length)
 					{
+						if(head.priority > 0)
+							sendGet(head.index);
+				
+					    if(head.length == 0)
+						{
+#if PRINT
+							printf("Empty load!Actually lost.\n");
+#endif
+						}
+
 						if(recvBufP + head.length > MAX_RECV_BUF)
 						{
 							printf("recv processed buf overflow!!\n");
@@ -322,8 +433,6 @@ void* recvData(void *argc)
 						memcpy(recvBuf + recvBufP, recvProcessBuf + scanP + sizeof(struct load_head), head.length);
 						recvBufP += head.length;
 						pthread_mutex_unlock(&recvBuf_lock);
-						if(head.priority > 0)
-							sendGet(head.index);
 						scanP = scanP + sizeof(struct load_head) + head.length;
 					}
 					else
@@ -335,7 +444,29 @@ void* recvData(void *argc)
 					printf("get index: %d\n", get.index);
 					unreg_buff(get.index);
 					scanP = scanP + sizeof(struct get_head);
+					sendDelaySign = 0;
 				}
+				else if(recvProcessBuf[scanP] == 'R' && recvProcessBuf[scanP + 1] == 'T' && recvProcessBuf[scanP + 2] == 'Y')
+				{
+					int rLen = 0;
+					int rPrio = 0;
+					memcpy(&retry, recvProcessBuf + scanP, sizeof(struct retry_head));
+					retryData = getPointerByIndex(retry.index, &rLen, &rPrio);
+					if(retryData != NULL)
+					{
+						resend(retryData, rLen, retry.index);
+					}
+					else
+					{
+						resend(retryData, 0, retry.index);
+					}
+					scanP = scanP + sizeof(struct retry_head);
+#if PRINT
+						printf("resend pack!! %d\n", retry.index);
+#endif
+
+				}
+
 				else
 					scanP++;
 			}
@@ -355,6 +486,7 @@ void* recvData(void *argc)
 		{
 			int scanP = 0;
 			struct get_head get;
+			struct retry_head retry;
 
 			while(scanP + sizeof(struct get_head) <= recvProcessBufP)
 			{
@@ -363,7 +495,29 @@ void* recvData(void *argc)
 					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
 					unreg_buff(get.index);
 					scanP = scanP + sizeof(struct get_head);
+					sendDelaySign = 0;
 				}
+				else if(recvProcessBuf[scanP] == 'R' && recvProcessBuf[scanP + 1] == 'T' && recvProcessBuf[scanP + 2] == 'Y')
+				{
+					int rLen = 0;
+					int rPrio = 0;
+					memcpy(&retry, recvProcessBuf + scanP, sizeof(struct retry_head));
+					retryData = getPointerByIndex(retry.index, &rLen, &rPrio);
+					if(retryData != NULL)
+					{
+						resend(retryData, rLen, retry.index);
+					}
+					else
+					{
+						resend(retryData, 0, retry.index);
+					}
+					scanP = scanP + sizeof(struct retry_head);
+#if PRINT
+						printf("resend pack!! %d\n", retry.index);
+#endif
+
+				}
+
 				else
 					scanP++;
 			}
@@ -384,7 +538,9 @@ void* recvData(void *argc)
 //		usleep(100);
 	}
 
+
 }
+
 
 int JEAN_init_master(int serverPort, int localPort, char *setIp)
 {
@@ -397,6 +553,7 @@ int JEAN_init_master(int serverPort, int localPort, char *setIp)
 	recvSign = 1;
     recvBuf = (char*)malloc(MAX_RECV_BUF);
     recvProcessBuf = (char*)malloc(MAX_RECV_BUF);
+    recvProcessBackBuf = (char*)malloc(MAX_RECV_BUF);
 
     initRing();	
 	ret = local_net_init(localPort);
@@ -537,6 +694,12 @@ int JEAN_send_master(char *data, int len, unsigned char priority, unsigned char 
     char *buffer;
 	struct load_head lHead;
 
+	while(sendDelaySign == 1)
+	{
+		usleep(1);
+		sendDelaySign = 0;
+	}
+
 	buffer = (char *)malloc(len + sizeof(struct load_head));
 	memcpy(lHead.logo, "JEAN", 4);
 	lHead.index = sendIndex;
@@ -546,6 +709,20 @@ int JEAN_send_master(char *data, int len, unsigned char priority, unsigned char 
 
 	memcpy(buffer, &lHead, sizeof(lHead));
 	memcpy(buffer + sizeof(lHead), data, len);
+
+#define TEST 1
+#if TEST
+	int rnd = 0;
+	int lost_emt = 30;
+	rnd = rand()%100;
+	if(rnd <= lost_emt)
+	    printf("Lost!!: rnd = %d, lost_emt = %d, lost_posibility = %d percent\n", rnd, lost_emt, lost_emt);
+
+	if(rnd > lost_emt)
+	{
+#endif
+
+
     if(connectionStatus == P2P)
 	{
 	    sendLen = sendto(sockfd, buffer, len + sizeof(lHead), 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
@@ -559,8 +736,12 @@ int JEAN_send_master(char *data, int len, unsigned char priority, unsigned char 
 		return NO_CONNECTION; 
 	}
 
+#if TEST
+	}
+#endif
+
 	if(priority > 0)
-		reg_buff(sendIndex, buffer, priority);
+		reg_buff(sendIndex, buffer, priority, len);
 	sendIndex++;
     sendNum += sendLen;
 
@@ -625,13 +806,14 @@ int JEAN_close_master()
 
 	free(recvBuf);
 	free(recvProcessBuf);
+	free(recvProcessBackBuf);
 	emptyRing();
 	close(sockfd);
 	return 0;
 }
 
 int main(){
-    int ret = -1;
+	int ret = -1;
 	int len = 0;
 	char data[10] = "test";
 
@@ -639,66 +821,39 @@ int main(){
 	if(ret < 0)
 		return ret;
 
-    JEAN_send_master(data, sizeof(data), 1, 0);
+	JEAN_send_master(data, sizeof(data), 1, 0);
 	printRingStatus();
 
 	memcpy(data, "test1", 6);
-    JEAN_send_master(data, sizeof(data), 1, 0);
+	JEAN_send_master(data, sizeof(data), 1, 0);
 	printRingStatus();
 	memcpy(data, "test2", 6);
-    JEAN_send_master(data, sizeof(data), 1, 0);
+	JEAN_send_master(data, sizeof(data), 1, 0);
 	printRingStatus();
 	memcpy(data, "test3", 6);
-    JEAN_send_master(data, sizeof(data), 1, 0);
+	JEAN_send_master(data, sizeof(data), 1, 0);
 	printRingStatus();
 
 	//sleep(1);
-  
-	JEAN_send_master(data, sizeof(data), 1, 0);
-	printRingStatus();
-    JEAN_send_master(data, sizeof(data), 1, 0);
-	printRingStatus();
-    JEAN_send_master(data, sizeof(data), 1, 0);
-	printRingStatus();
-    JEAN_send_master(data, sizeof(data), 1, 0);
-	printRingStatus();
-    JEAN_send_master(data, sizeof(data), 1, 0);
-	printRingStatus();
-    JEAN_send_master(data, sizeof(data), 1, 0);
-	printRingStatus();
-    JEAN_send_master(data, sizeof(data), 1, 0);
-	printRingStatus();
-    JEAN_send_master(data, sizeof(data), 1, 0);
-	printRingStatus();
-    JEAN_send_master(data, sizeof(data), 1, 0);
-	printRingStatus();
+	int i = 0;
+	while(i < 10000)
+	{	
+		usleep(10000);
+		data[4] = '0' + i%2;
+		JEAN_send_master(data, sizeof(data), 1, 0);
+		printRingStatus();
+		i++;
+	}
 
-	sleep(1);
-    len = JEAN_recv_master(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data, len);
-    len = JEAN_recv_master(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data, len);
-	len = JEAN_recv_master(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data, len);
-    len = JEAN_recv_master(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data, len);
-    len = JEAN_recv_master(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data, len);
-    len = JEAN_recv_master(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data, len);
-    len = JEAN_recv_master(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data, len);
-    len = JEAN_recv_master(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data, len);
-    len = JEAN_recv_master(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data, len);
+	i = 0;
+	while(i < 10000)
+	{
+		len = JEAN_recv_master(data, sizeof(data), 1, 0);
+		printf("recv: %s %d\n", data, len);
+		usleep(1000);
+		i++;
+	}
 
-
-	usleep(1500000);
-    len = JEAN_recv_master(data, sizeof(data), 1, 0);
-	printf("recv: %s %d\n", data, len);
-
-
-    JEAN_close_master();
+	JEAN_close_master();
 	return 0;
 }

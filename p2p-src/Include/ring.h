@@ -10,16 +10,18 @@
 #include <sys/time.h>
 
 void initRing();
-int reg_buff(unsigned int index, char *pointer, unsigned char priority);
+int reg_buff(unsigned int index, char *pointer, unsigned char priority, int len);
 int unreg_buff(unsigned int index);
 void emptyRing();
 void printRingStatus();
+char *getPointerByIndex(unsigned int index, int *len, int *Prio);
 
 struct buf_node
 {
-    unsigned int index;
+    u_int32_t index;
 	unsigned char priority;
     char *pointer;
+	u_int64_t length;
     struct timeval tv;
 };
 
@@ -69,9 +71,13 @@ int getEmpPos()
 	gettimeofday(&cur_tv, NULL);
 	for(i = 0; i < RING_LEN; i++)
 	{
-		if(cur_tv.tv_sec*1000000 + cur_tv.tv_usec - buf_list[i].tv.tv_sec*1000000 - buf_list[i].tv.tv_usec > 35000000*buf_list[i].priority)
+		if((buf_list[i].priority <= 0 || (cur_tv.tv_sec*1000000 + cur_tv.tv_usec - buf_list[i].tv.tv_sec*1000000 - buf_list[i].tv.tv_usec > 35000000*buf_list[i].priority)) && empty_list[i] != -1)
+		{
 			empty_list[i] = -1;
-        if(empty_list[i] == -1)
+			free(buf_list[i].pointer);
+		}
+
+		if(empty_list[i] == -1)
 			return i;
 	}
 	return -1;
@@ -88,7 +94,36 @@ int getIndexPos(unsigned int index)
 	return -1;
 }
 
-int reg_buff(unsigned int index, char *pointer, unsigned char priority)
+char *getPointerByIndex(unsigned int index, int *len, int *Prio)
+{
+	int pos = 0;
+	pos = getIndexPos(index);
+	if(pos < 0)
+	{
+		*len = 0;
+		*Prio = 0;
+		return NULL;
+	}
+
+	if(buf_list[pos].priority <= 0)
+	{
+		empty_list[pos] = -1;
+		free(buf_list[pos].pointer);
+		*len = 0;
+		*Prio = 0;
+		return NULL;
+	}
+ 
+	printf("resend ring : index %d\n", buf_list[pos].index);
+	buf_list[pos].priority--;
+	*len = buf_list[pos].length;
+	*Prio = buf_list[pos].priority;
+
+	return buf_list[pos].pointer;
+
+}
+
+int reg_buff(unsigned int index, char *pointer, unsigned char priority, int len)
 {
 	int times = 0;
     int pos = 0;
@@ -104,7 +139,7 @@ int reg_buff(unsigned int index, char *pointer, unsigned char priority)
 	pthread_mutex_lock(&ring);
 	if(times >= TRY_MAX_TIMES)
 	{
-		printf("ring over flow!!");
+		printf("ring over flow!!\n");
 		emptyRing();
 	}
 
@@ -112,6 +147,7 @@ int reg_buff(unsigned int index, char *pointer, unsigned char priority)
     buf_list[pos].index = index;
     buf_list[pos].pointer = pointer;
     buf_list[pos].priority = priority;
+	buf_list[pos].length = len;
     gettimeofday(&buf_list[pos].tv, NULL);
     empty_list[pos] = 1;
 
