@@ -125,13 +125,21 @@ struct node_net * find_item(char *name){
 	return NULL;
 }
 
-struct node_net * find_item_by_ip(char *ip, int m){//m=0,master m=1,slave
+struct node_net * find_item_by_ip(char *ip, int* m){//m=0,master m=1,slave
 	list_for_each(plist, &head){
 		node = list_entry(plist, struct node_net, list);
 	//	printf("%s\n",node->Uname);
 	//	printf("%d\n",node->sin_len);
-		if(strcmp(inet_ntoa(node->local_sin_m->sin_addr), ip) == 0 && m == 0) return node;
-		if(strcmp(inet_ntoa(node->local_sin_s->sin_addr), ip) == 0 && m == 1) return node;
+		if(strcmp(inet_ntoa(node->local_sin_m->sin_addr), ip) == 0)
+		{
+			*m = 0;
+		   	return node;
+		}
+		else if(strcmp(inet_ntoa(node->local_sin_s->sin_addr), ip) == 0)
+		{
+			*m = 1;
+			return node;
+		}
 	}
 
 	return NULL;

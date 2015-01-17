@@ -779,9 +779,11 @@ int JEAN_init_slave(int setServerPort, int setLocalPort, char *setIp)
 				Send_CMD(GET_REQ, 0x14);
 //				printf("Pole result = %d, key = 0x%x.\n", pole_res, commonKey);
 				Pole_ret = pole_res;
+#ifndef TEST_TURN
 				if(Pole_ret == 1)
 					connectionStatus = P2P;
 				else
+#endif
 					connectionStatus = TURN;
 
 				pthread_create(&recvDat_id, NULL, recvData, NULL);

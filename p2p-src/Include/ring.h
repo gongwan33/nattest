@@ -133,7 +133,7 @@ int reg_buff(unsigned int index, char *pointer, unsigned char priority, int len)
 	while(pos == -1 && times < TRY_MAX_TIMES)
 	{
 		pos = getEmpPos();
-		usleep(10000);
+		usleep(1000);
 		times++;
 	}
 

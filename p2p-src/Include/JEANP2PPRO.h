@@ -19,7 +19,7 @@
 #define AV_REQ		0x0d
 #define M_POL_REQ	0x0e
 #define S_POL_REQ	0x0f
-#define TURN_REQ	0x10
+#define TURN_REQ	'J'
 #define MASTER_QUIT 0x11
 
 #define EXT_CMD		0xff

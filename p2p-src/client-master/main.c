@@ -761,9 +761,11 @@ int JEAN_init_master(int serverPort, int localPort, char *setIp)
 				Send_CMD(GET_REQ, 0x14);
 				printf("Pole result = %d, key = %d.\n", pole_res, commonKey);
 				Pole_ret = pole_res;
+#ifndef TEST_TURN
 				if(Pole_ret == 1)
 					connectionStatus = P2P;
 				else
+#endif
 					connectionStatus = TURN;
 
 				pthread_create(&recvDat_id, NULL, recvData, NULL);
@@ -937,7 +939,7 @@ int main(){
 	int i = 0;
 	while(i < 10000)
 	{	
-		usleep(10000);
+		usleep(5000);
 		data[4] = '0' + i%2;
 		JEAN_send_master(data, sizeof(data), 4, 0);
 		printRingStatus();

@@ -15,6 +15,7 @@
 #include <DSet.h>
 #include <commonkey.h>
 
+#define MAX_RECV_BUF  1024*1024*10
 #define TURN_DATA_SIZE 1024*3
 #define MAX_TRY 10
 #define PORT1 61000
@@ -27,7 +28,7 @@ static char pathname[50] = "./natinfo.log";
 static int sfd;
 static struct sockaddr_in sin, recv_sin;	
 static int sin_len, recv_sin_len;
-static char recv_str[50];
+static char *recv_str;
 static int port = PORT1;
 static char Uname[10];
 static char Passwd[10];
@@ -127,7 +128,7 @@ int Send_S_IP(char * name){
 	for(i = 0; i < MAX_TRY; i++){
 		sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)tmp_node->recv_sin_m, recv_sin_len);
 		printf("Send slave ip to master!%s\n", inet_ntoa(tmp_node->recv_sin_s->sin_addr));
-		recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		recvfrom(sfd, recv_str, MAX_RECV_BUF, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		if(recv_str[0] == GET_REQ && recv_str[1] == 0x08){
 			Send_CMD(GET_REQ, 0x09);
 		   	break;
@@ -225,11 +226,15 @@ int main(){
 	char res;
 	struct sockaddr_in tmp_sin, *p_sin;
 	struct node_net *p_node;
+	struct load_head turnHead;
 	int length = 0;
 	char priority;
 	char data[TURN_DATA_SIZE];
+	unsigned int recvLen = 0;
 
 	init_list();
+
+	recv_str = (char *)malloc(MAX_RECV_BUF);
 	
 	ret = local_net_init();
 	if(ret < 0){
@@ -244,9 +249,9 @@ int main(){
 	while(1){	
 		set_rec_timeout(0, 0);//(usec, sec)
 		memset(recv_str, 0, 50);
-		recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		recvLen = recvfrom(sfd, recv_str, MAX_RECV_BUF, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 		Get_W = recv_str[0];
-		printf("OPCODE = %d\n", Get_W);
+//		printf("OPCODE = %d\n", Get_W);
 
 		switch(Get_W){
 			case V_UAP:
@@ -423,7 +428,7 @@ int main(){
 						if(ret < 0) printf(" Username connect failed.\n");
 						printf("Master connecting slave...\n");
 					}
-					recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+					recvfrom(sfd, recv_str, MAX_RECV_BUF, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 					if(recv_str[0] == GET_REQ && recv_str[1] == 0x0e){
 						printf("Pole ok! Connection established.\n");
 						tmpn->pole_res = 1;
@@ -457,7 +462,7 @@ int main(){
 							printf("Slave connecting master...\n");
 						}
 
-						recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+						recvfrom(sfd, recv_str, MAX_RECV_BUF, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 						if(recv_str[0] == GET_REQ && recv_str[1] == 0x10){
 							printf("Pole ok! Connection established.\n");
 							tmpn->pole_res = 1;
@@ -492,7 +497,7 @@ int main(){
 					}
 					printf("Send connection result(%d) to master and slave.\n", tmpn->pole_res);
 
-					recvfrom(sfd, recv_str, sizeof(recv_str), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+					recvfrom(sfd, recv_str, MAX_RECV_BUF, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 					if(recv_str[0] == GET_REQ && recv_str[1] == 0x14){
 						break;
 					}
@@ -506,48 +511,44 @@ int main(){
 				break;
 				
 			case TURN_REQ:
-				p_node = find_item_by_ip(inet_ntoa(recv_sin.sin_addr), 1);
-				if(p_node != NULL) 
-					p_sin = p_node->recv_sin_m;
-				if(p_node == NULL)
-					p_node = find_item_by_ip(inet_ntoa(recv_sin.sin_addr), 0);
-				if(p_node == NULL){
-					printf("Node not found. Turn request rejected!\n");
-					break;
-				}
-				else 
-					p_sin = p_node->recv_sin_s;
+				if(recv_str[1] == 'E' && recv_str[2] == 'A' && recv_str[3] == 'N')
+				{
+					int m;
+					p_node = find_item_by_ip(inet_ntoa(recv_sin.sin_addr), &m);
+					if(p_node != NULL && m == 1) 
+						p_sin = p_node->recv_sin_m;
+					else if(p_node != NULL && m ==0)
+						p_sin = p_node->recv_sin_s;
+					    
+					if(p_node == NULL){
+						printf("Node not found. Turn request rejected!\n");
+						break;
+					}
 
-				priority = recv_str[3];
-				length = (recv_str[1] << 8) | recv_str[2];
-				if(priority > MAX_TRY) priority = MAX_TRY;
-				if(length < 0) length = 0;	
 #if PRINT
-				printf("TURN mode. Length = %d\n", length);
+					printf("TURN mode. Length = %d, master = %d\n", recvLen, m);
 #endif
 
-				if(length > 46){
-				recvfrom(sfd, data, length - 46 , 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+					if(length >= 0){
+						if(p_sin != NULL) 
+							sendto(sfd, recv_str, recvLen, 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+						else 
+							printf("Erro: node info lost!\n");
 
-				memcpy(data + 50, data, length - 46);
-				memcpy(data, recv_str, 50);
-
-				if(p_sin != NULL) sendto(sfd, data, length + 4, 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
-				else 
-					printf("Erro: node info lost!\n");
-
+					}
+					else{
+						if(p_sin != NULL) 
+							sendto(sfd, recv_str, recvLen, 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+						else 
+							printf("Erro: node info lost!\n");
+					}
 				}
-				else{
-					if(p_sin != NULL) sendto(sfd, recv_str, length + 4, 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
-					else 
-						printf("Erro: node info lost!\n");
-				}
-
 				break;
 
 		}
 	}
 
+	free(recv_str);
 	empty_item();
 	close(sfd);
 	return 0;
