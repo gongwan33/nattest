@@ -225,6 +225,17 @@ void sendGet(unsigned int index)
 	memcpy(&getSt, "GET", 3);
 	getSt.index = index;
 
+#if TEST_LOST
+	int rnd = 0;
+	int lost_emt = LOST_PERCENT;
+	rnd = rand()%100;
+	if(rnd <= lost_emt)
+	    printf("Lost!!: rnd = %d, lost_emt = %d, lost_posibility = %d percent\n", rnd, lost_emt, lost_emt);
+
+	if(rnd > lost_emt)
+	{
+#endif
+
 	if(connectionStatus == P2P)
 	{
 		sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
@@ -233,6 +244,9 @@ void sendGet(unsigned int index)
 	{
 		sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	}
+#if TEST_LOST
+	}
+#endif
 
 }
 
@@ -242,7 +256,17 @@ void sendRetry(unsigned int index)
 	memcpy(&getSt, "RTY", 3);
     getSt.index = index;
 
-    printf("retry %d\n", index);
+//    printf("retry %d\n", index);
+#if TEST_LOST
+	int rnd = 0;
+	int lost_emt = LOST_PERCENT;
+	rnd = rand()%100;
+	if(rnd <= lost_emt)
+	    printf("Lost!!: rnd = %d, lost_emt = %d, lost_posibility = %d percent\n", rnd, lost_emt, lost_emt);
+
+	if(rnd > lost_emt)
+	{
+#endif
 
     if(connectionStatus == P2P)
 	{
@@ -253,6 +277,10 @@ void sendRetry(unsigned int index)
 	    sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	}
 
+#if TEST_LOST
+	}
+#endif
+
 }
 
 
@@ -262,11 +290,23 @@ void resend(char *data, int len, u_int32_t index)
 	memset(&tLoad, 0, sizeof(struct load_head));
 	if(len == 0 || data == 0)
 	{
+		memcpy(&tLoad.logo, "JEAN", 4);
 		tLoad.index = index;
 		tLoad.length = 0;
 		tLoad.priority = 0;
 		data = (char *)&tLoad;
 	}
+
+#if TEST_LOST
+	int rnd = 0;
+	int lost_emt = LOST_PERCENT;
+	rnd = rand()%100;
+	if(rnd <= lost_emt)
+	    printf("Lost!!: rnd = %d, lost_emt = %d, lost_posibility = %d percent\n", rnd, lost_emt, lost_emt);
+
+	if(rnd > lost_emt)
+	{
+#endif
 
     if(connectionStatus == P2P)
 	{
@@ -276,6 +316,10 @@ void resend(char *data, int len, u_int32_t index)
 	{
 	    sendto(sockfd, data, len + sizeof(struct load_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	}
+
+#if TEST_LOST
+	}
+#endif
 }
 
 int findIndexInBuf(char *buf, int *start, int *end, int *datLen, u_int32_t index)
@@ -398,7 +442,7 @@ void* recvData(void *argc)
 					int lostNum = 0;
 					memcpy(&head, recvProcessBuf + scanP, sizeof(struct load_head));
 					lostNum = head.index - lastIndex;
-printf("lastindex %d index %d \n", lastIndex, head.index);
+//					printf("lastindex %d index %d \n", lastIndex, head.index);
 
 					if(pauseSign == 1 && lostNum == 1)
 						getLostNum++;
@@ -416,13 +460,24 @@ printf("lastindex %d index %d \n", lastIndex, head.index);
 						    int start, end;
 						    int pri;
                             pri = findIndexInBuf(recvProcessBackBuf, &start, &end, &recvProcessBackBufP, lastIndex + 1);
-							printf("found pack in back %d\n", pri);
+					//		printf("found pack in back %d\n", pri);
 						    if(pri >= 0)
 						    {
+#if PRINT
+					            printf("load head: J %d\n", lastIndex + 1);
+#endif
 								if(pri > 0)
 								    sendGet(lastIndex + 1);
 								lastIndex = lastIndex + 1;
-								memcpy(recvBuf+recvBufP, recvProcessBackBuf + start, end - start);
+								if(end - start > 0)
+									memcpy(recvBuf+recvBufP, recvProcessBackBuf + start, end - start);
+								else
+								{
+#if PRINT
+									printf("Empty load!Actually lost.\n");
+#endif
+								}
+
 								break;
 						    }
 						}
@@ -456,7 +511,9 @@ printf("lastindex %d index %d \n", lastIndex, head.index);
 
 					lastIndex = head.index;
 
+#if PRINT
 					printf("load head: %c %d %d %d %d\n", head.logo[0], head.index, head.get_number, head.priority, (unsigned int)head.length);
+#endif
 					if(recvProcessBufP - scanP - sizeof(struct load_head) >= head.length)
 					{
 						if(head.priority > 0)
@@ -486,7 +543,9 @@ printf("lastindex %d index %d \n", lastIndex, head.index);
 				else if(recvProcessBuf[scanP] == 'G' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'T')
 				{
 					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
+#if PRINT
 					printf("get index: %d\n", get.index);
+#endif
 					unreg_buff(get.index);
 					scanP = scanP + sizeof(struct get_head);
 				}
@@ -771,6 +830,18 @@ int JEAN_send_slave(char *data, int len, unsigned char priority, unsigned char v
 
 	memcpy(buffer, &lHead, sizeof(lHead));
 	memcpy(buffer + sizeof(lHead), data, len);
+
+#if TEST_LOST
+	int rnd = 0;
+	int lost_emt = LOST_PERCENT;
+	rnd = rand()%100;
+	if(rnd <= lost_emt)
+	    printf("Lost!!: rnd = %d, lost_emt = %d, lost_posibility = %d percent\n", rnd, lost_emt, lost_emt);
+
+	if(rnd > lost_emt)
+	{
+#endif
+
     if(connectionStatus == P2P)
 	{
 	    sendLen = sendto(sockfd, buffer, len + sizeof(lHead), 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
@@ -783,6 +854,10 @@ int JEAN_send_slave(char *data, int len, unsigned char priority, unsigned char v
 	{
 		return NO_CONNECTION; 
 	}
+
+#if TEST_LOST
+	}
+#endif
 
 	if(priority > 0)
 		reg_buff(sendIndex, buffer, priority, len);
@@ -845,21 +920,15 @@ int main(){
 	if(ret < 0)
 		return ret;
 	int i = 0;
-	while(i < 15000)
+	while(i < 10000)
 	{
 		len = JEAN_recv_slave(data, sizeof(data), 1, 0);
 		if(len > 0)
 			printf("recv: %s %d\n", data, len);
-		usleep(1000);
-		i++;
-	}
 
-	i = 0;
-	while(i < 10000)
-	{
-		data[4] = i%2;
-		JEAN_send_slave(data, sizeof(data), 1, 0);
-		printRingStatus();
+//		JEAN_send_slave(data, sizeof(data), 1, 0);
+//		printRingStatus();
+		usleep(1000);
 		i++;
 	}
 

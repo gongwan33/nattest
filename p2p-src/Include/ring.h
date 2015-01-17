@@ -1,8 +1,9 @@
 #ifndef RING_H
 #define RING_H
 
-#define TRY_MAX_TIMES 20
-#define RING_LEN 8
+#define TRY_MAX_TIMES 100
+#define TIMEOUT_ELM 500000
+#define RING_LEN 32
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -71,7 +72,7 @@ int getEmpPos()
 	gettimeofday(&cur_tv, NULL);
 	for(i = 0; i < RING_LEN; i++)
 	{
-		if((buf_list[i].priority <= 0 || (cur_tv.tv_sec*1000000 + cur_tv.tv_usec - buf_list[i].tv.tv_sec*1000000 - buf_list[i].tv.tv_usec > 35000000*buf_list[i].priority)) && empty_list[i] != -1)
+		if((buf_list[i].priority <= 0 || (cur_tv.tv_sec*1000000 + cur_tv.tv_usec - buf_list[i].tv.tv_sec*1000000 - buf_list[i].tv.tv_usec > TIMEOUT_ELM*buf_list[i].priority)) && empty_list[i] != -1)
 		{
 			empty_list[i] = -1;
 			free(buf_list[i].pointer);
@@ -105,7 +106,7 @@ char *getPointerByIndex(unsigned int index, int *len, int *Prio)
 		return NULL;
 	}
 
-	if(buf_list[pos].priority <= 0)
+	if(buf_list[pos].priority <= 0 && empty_list[pos] != -1)
 	{
 		empty_list[pos] = -1;
 		free(buf_list[pos].pointer);
@@ -114,7 +115,7 @@ char *getPointerByIndex(unsigned int index, int *len, int *Prio)
 		return NULL;
 	}
  
-	printf("resend ring : index %d\n", buf_list[pos].index);
+//	printf("resend ring : index %d\n", buf_list[pos].index);
 	buf_list[pos].priority--;
 	*len = buf_list[pos].length;
 	*Prio = buf_list[pos].priority;
@@ -148,7 +149,7 @@ int reg_buff(unsigned int index, char *pointer, unsigned char priority, int len)
     buf_list[pos].pointer = pointer;
     buf_list[pos].priority = priority;
 	buf_list[pos].length = len;
-    gettimeofday(&buf_list[pos].tv, NULL);
+    gettimeofday(&(buf_list[pos].tv), NULL);
     empty_list[pos] = 1;
 
 	pthread_mutex_unlock(&ring);
@@ -165,7 +166,8 @@ int unreg_buff(unsigned int index)
 	if(pos == -1)
 		return -1;
 
-	free(buf_list[pos].pointer);
+	if(empty_list[pos] != -1)
+		free(buf_list[pos].pointer);
 
 	pthread_mutex_lock(&ring);
     empty_list[pos] = -1;
