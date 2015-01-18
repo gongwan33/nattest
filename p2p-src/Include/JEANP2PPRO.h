@@ -21,6 +21,7 @@
 #define S_POL_REQ	0x0f
 #define TURN_REQ	0x10
 #define MASTER_QUIT 0x11
+#define CMD_CHAN    0x12
 
 #define EXT_CMD		0xff
 

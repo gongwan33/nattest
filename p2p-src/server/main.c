@@ -21,13 +21,18 @@
 #define MAX_TRY 10
 #define PORT1 61000
 #define TURN_PORT 61001
+#define CMD_PORT 61002
 
 #define PEER_SHEET_LEN 200
 #define UNAME "wang"
 #define PASSWD "123456"
 
+#define cmdBufSize 1024*5
+
 static char pathname[50] = "./natinfo.log";
 static int sfd;
+static int c1fd;
+static int c2fd;
 static int turnSfd;
 static struct sockaddr_in sin, recv_sin;	
 static struct sockaddr_in turn_recv_sin;	
@@ -37,13 +42,20 @@ static int port = PORT1;
 static char Uname[10];
 static char Passwd[10];
 static char turnSign = 0;
+static char cmdSign = 0;
 static pthread_t turn_id;
+static pthread_t cmd_id;
 static char turnThreadRunning = 0;
+static char cmdThreadRunning = 0;
+static int connectSign = 0;
 
 static int  Peers_Sheet_Index = 0;
 static struct node_net *Peer_Login;
 static char *recvProcessBuf;
 static int recvProcessBufP = 0;
+
+static char buf1[cmdBufSize];
+static char buf2[cmdBufSize];
 
 int local_net_init(){
 	bzero(&sin, sizeof(sin));
@@ -483,6 +495,111 @@ void* turnThread(void *argc)
 	turnThreadRunning = 0;
 }
 
+void* cmdThread_recv2(void * argc)
+{
+	pthread_detach(pthread_self());
+
+	int len2 = 0;
+
+	while(connectSign == 1)
+	{
+		len2 = recv(c2fd, buf2, cmdBufSize, 0); 
+
+			if(len2 == -1)
+			{
+				printf("call to recv\n");
+			}
+			else if(len2 > 0)
+			{
+				if(send(c1fd, buf2, len2, 0) == -1)
+				{
+					printf("call to send\n");
+				}
+			}
+	}
+
+}
+
+void* cmdThread(void *arg)
+{
+	cmdThreadRunning = 1;
+
+	pthread_detach(pthread_self());
+	struct sockaddr_in sin1;
+	struct sockaddr_in sin2;
+	struct sockaddr_in pin1;
+	struct sockaddr_in pin2;
+	int sfd1;
+	int address_size;
+	int len1 = 0;
+	pthread_t rec_id;
+
+
+	sfd1 = socket(AF_INET, SOCK_STREAM, 0);
+
+	if(sfd1 == -1)
+	{
+		printf("call to socket\n");
+	}
+
+	bzero(&sin1,sizeof(sin1));
+	sin1.sin_family = AF_INET;
+	sin1.sin_addr.s_addr = INADDR_ANY;
+	sin1.sin_port = htons(CMD_PORT);
+
+	if(bind(sfd1, (struct sockaddr *)&sin1, sizeof(sin1)) == -1)
+	{
+		printf("call to bind\n");
+	}
+
+	if(listen(sfd1, 20) == -1) 
+	{
+		printf("call to listen\n");
+	}
+
+
+	while(cmdSign == 1)
+	{   
+		c1fd = accept(sfd1,(struct sockaddr *)&pin1, &address_size);
+		c2fd = accept(sfd1,(struct sockaddr *)&pin2, &address_size);
+		if(c1fd == -1 || c2fd == -1)
+		{
+			printf("call to accept\n");
+			continue;
+		}
+		else
+		{
+			connectSign = 1;
+			pthread_create(&rec_id, NULL, cmdThread_recv2, NULL);
+		}
+
+		while(connectSign == 1)
+		{
+			len1 = recv(c1fd, buf1, cmdBufSize, 0); 
+
+			if(len1 == -1)
+			{
+				printf("call to recv\n");
+			}
+			else if(len1 > 0)
+			{
+				if(send(c2fd, buf1, len1, 0) == -1)
+				{
+					printf("call to send\n");
+				}
+			}
+
+		}
+
+		connectSign = 0;
+		close(c1fd);
+		close(c2fd);
+	}
+
+	close(sfd);
+	cmdThreadRunning = 0;
+}
+
 int main(){
 	int ret = 0;
 	char Get_W;
@@ -657,6 +774,8 @@ int main(){
 
 			case MASTER_QUIT:
 				turnSign = 0;
+				cmdSign = 0;
+		        connectSign = 0;
 				memset(Uname, 0, 10);
 				sscanf(recv_str, "%c %s", &Get_W, Uname);
 
@@ -784,13 +903,24 @@ int main(){
 				recvProcessBufP = 0;
 				if(turnThreadRunning == 0)
 					pthread_create(&turn_id, NULL, turnThread, NULL);
-				printf("%d\n", (int)turn_id);
+				break;
+
+			case CMD_CHAN:
+				Send_CMD(GET_REQ, 0x1);
+				cmdSign = 1;
+				memset(buf1, 0 ,sizeof(buf1));
+				memset(buf2, 0 ,sizeof(buf2));
+				printf("Entering cmd thread!\n");
+				if(cmdThreadRunning == 0)
+					pthread_create(&cmd_id, NULL, cmdThread, NULL);
 				break;
 
 		}
 	}
 
+	connectSign = 0;
 	turnSign = 0;
+	cmdSign = 0;
 	free(recv_str);
 	empty_item();
 	close(sfd);

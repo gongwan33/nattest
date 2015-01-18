@@ -26,7 +26,8 @@
 #define TURN_DATA_SIZE 1024*3
 #define KEEP_CONNECT_PACK 0
 //#define server_ip_1 "192.168.1.216"
-#define server_ip_1 "192.168.1.114"
+//#define server_ip_1 "192.168.1.114"
+#define server_ip_1 "192.168.1.109"
 //#define server_ip_1 "192.168.1.4"
 //#define server_ip_1 "58.214.236.114"
 
@@ -36,6 +37,7 @@
 #define ACT_NETCARD "eth0"
 #define server_port 61000
 #define server_turn_port 61001
+#define server_cmd_port 61002
 #define local_port 6788
 
 static char recvSign;
@@ -44,6 +46,7 @@ static struct ifreq ifr, *pifr;
 static struct ifconf ifc;
 static char ip_info[50];
 static int sockfd;
+static int cmdfd;
 static int port, sin_size, recv_sin_len;
 static char mac[6], ip[4], buff[1024];
 static pthread_t keep_connection;
@@ -172,6 +175,20 @@ int set_rec_timeout(int usec, int sec){
 int Send_TURN(){
 	char Sen_W;
 	Sen_W = TURN_REQ;
+	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
+
+	ip_info[0] = Sen_W;
+	memcpy(ip_info + 1, USERNAME, 10);
+	memcpy(ip_info + 12, PASSWD, 10);
+	memcpy(ip_info + 34, &host_sin, sizeof(struct sockaddr_in));
+
+	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	return 0;
+}
+
+int Send_CMDOPEN(){
+	char Sen_W;
+	Sen_W = CMD_CHAN;
 	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
 
 	ip_info[0] = Sen_W;
@@ -381,6 +398,62 @@ int findIndexInBuf(char *buf, int *start, int *end, int *datLen, u_int32_t index
 
 	return -1;
 
+}
+
+int init_CMD_CHAN()
+{
+    struct sockaddr_in pin;
+
+	bzero(&pin,sizeof(pin));
+	pin.sin_family = AF_INET;
+	pin.sin_addr.s_addr = inet_addr(server_ip_1);
+	pin.sin_addr.s_addr = htonl(INADDR_ANY);
+	pin.sin_port = htons(server_cmd_port);
+
+	if((cmdfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+	{
+		printf("Error opening socket \n");
+		return -1;
+	}
+
+	if(connect(cmdfd, (void *)&pin, sizeof(pin)) == -1)
+	{
+		printf("Error connecting to socket \n");
+		return -1;
+	}
+
+	return 0;
+}
+
+int close_CMD_CHAN()
+{
+	close(cmdfd);
+}
+
+int send_cmd(char *data, int len)
+{
+	int sendLen = 0;
+	sendLen = send(cmdfd, data, len, 0);
+	if(sendLen == -1)
+	{
+		printf("Error in send\n");
+		return -1;
+	}
+
+	return sendLen;
+}
+
+int recv_cmd(char *data, int len)
+{
+	int recvLen = 0;
+	recvLen = recv(cmdfd, data, len, 0);
+	if(recvLen == -1)
+	{
+		printf("Error in recv\n");
+		return -1;
+	}
+
+	return recvLen;
 }
 
 void* recvData(void *argc)
@@ -832,8 +905,23 @@ int JEAN_init_slave(int setServerPort, int setLocalPort, char *setIp)
 
 				}
 
+				clean_rec_buff();
+				for(i = 0; i < MAX_TRY + 1 ; i++){
+					printf("require cmd channel open \n");
+					Send_CMDOPEN();
+					char result = 0;
+
+					recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+					if(Ctl_Rec[0] == GET_REQ) 
+						break;
+					sleep(1);
+				}
+
+				if(i >= MAX_TRY + 1) return OUT_TRY;
+
 				if(recvThreadRunning == 0)
 					pthread_create(&recvDat_id, NULL, recvData, NULL);
+
 				break;
 
 			case S_POL_REQ:
@@ -964,24 +1052,35 @@ int JEAN_close_slave()
 int main(){
 	int ret = 0;
 	char data[10];
+	char rcv[10];
 	int len;
 
 	ret = JEAN_init_slave(server_port, local_port, server_ip_1);
 	if(ret < 0)
 		return ret;
+
+	ret = init_CMD_CHAN();
+	if(ret < 0)
+		return ret;
+
 	int i = 0;
 	while(i < 10000)
 	{
-		len = JEAN_recv_slave(data, sizeof(data), 1, 0);
-		if(len > 0)
-			printf("recv: %s %d\n", data, len);
+//		len = JEAN_recv_slave(data, sizeof(data), 1, 0);
+//		if(len > 0)
+//			printf("recv: %s %d\n", data, len);
 
-		JEAN_send_slave(data, sizeof(data), 1, 0);
-		printRingStatus();
+		len = recv_cmd(rcv, 10);
+		if(len > 0)
+			printf("cmd recv!!!!!! %s\n", rcv);
+
+//		JEAN_send_slave(data, sizeof(data), 1, 0);
+//		printRingStatus();
 		usleep(1000);
 		i++;
 	}
 
+	close_CMD_CHAN();
 	JEAN_close_slave();
 	return 0;
 }
