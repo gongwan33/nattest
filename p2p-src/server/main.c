@@ -534,7 +534,6 @@ void* cmdThread(void *arg)
 	int len1 = 0;
 	pthread_t rec_id;
 
-
 	sfd1 = socket(AF_INET, SOCK_STREAM, 0);
 
 	if(sfd1 == -1)
@@ -596,7 +595,7 @@ void* cmdThread(void *arg)
 		close(c2fd);
 	}
 
-	close(sfd);
+	close(sfd1);
 	cmdThreadRunning = 0;
 }
 
