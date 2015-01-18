@@ -300,11 +300,11 @@ void sendRetry(unsigned int index)
 
     if(connectionStatus == P2P)
 	{
-	    sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
+	    sendto(sockfd, &getSt, sizeof(struct retry_head), 0, (struct sockaddr *)&slave_sin, sizeof(struct sockaddr_in));
 	}
 	else if(connectionStatus == TURN)
 	{
-	    sendto(sockfd, &getSt, sizeof(struct get_head), 0, (struct sockaddr *)&turnaddr, sizeof(turnaddr));
+	    sendto(sockfd, &getSt, sizeof(struct retry_head), 0, (struct sockaddr *)&turnaddr, sizeof(turnaddr));
 	}
 
 #if TEST_LOST
@@ -977,9 +977,9 @@ int main(){
 		JEAN_send_master(data, sizeof(data), 4, 0);
 		printRingStatus();
 
-//  	len = JEAN_recv_master(data, sizeof(data), 1, 0);
-//  	if(len > 0)
-//  		printf("recv: %s %d\n", data, len);
+		len = JEAN_recv_master(data, sizeof(data), 1, 0);
+		if(len > 0)
+			printf("recv: %s %d\n", data, len);
 
 		i++;
 	}
