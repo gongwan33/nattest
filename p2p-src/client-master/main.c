@@ -216,11 +216,13 @@ int Send_TURN(){
 int Send_CMDOPEN(){
 	char Sen_W;
 	Sen_W = CMD_CHAN;
+	char id = 'M';
 	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
 
 	ip_info[0] = Sen_W;
 	memcpy(ip_info + 1, USERNAME, 10);
 	memcpy(ip_info + 12, PASSWD, 10);
+	ip_info[23] = id;
 	memcpy(ip_info + 34, &host_sin, sizeof(struct sockaddr_in));
 
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
@@ -403,6 +405,8 @@ int close_CMD_CHAN()
 int send_cmd(char *data, int len)
 {
 	int sendLen = 0;
+	if(len < 0)
+		return -1;
 	sendLen = send(cmdfd, data, len, 0);
 	if(sendLen == -1)
 	{
@@ -889,32 +893,32 @@ int JEAN_init_master(int serverPort, int localPort, char *setIp)
 				if(recvThreadRunning == 0)
 					pthread_create(&recvDat_id, NULL, recvData, NULL);
 
-
 				break;
 
 			case M_POL_REQ:
-			Send_CMD(GET_REQ, 0x12);
-			printf("Get M_POL_REQ from server.\n");
-			for(i = 0; i < MAX_TRY; i++){
-				memset(Ctl_Rec, 0, 50);
-				Send_POL(POL_REQ, &slave_sin);
-				printf("Send POL_REQ to slave.\n");
-				recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-				if(Ctl_Rec[0] == GET_REQ && Ctl_Rec[1] == 0x0a){
-					printf("Pole ok! Connection established.\n");
-					Send_CMD(GET_REQ, 0x0e);
-					break;
+				Send_CMD(GET_REQ, 0x12);
+				printf("Get M_POL_REQ from server.\n");
+				for(i = 0; i < MAX_TRY; i++){
+					memset(Ctl_Rec, 0, 50);
+					Send_POL(POL_REQ, &slave_sin);
+					printf("Send POL_REQ to slave.\n");
+					recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+					if(Ctl_Rec[0] == GET_REQ && Ctl_Rec[1] == 0x0a){
+						printf("Pole ok! Connection established.\n");
+						Send_CMD(GET_REQ, 0x0e);
+						break;
+					}
 				}
-			}
-			if(i >= MAX_TRY){
-				Send_CMD(GET_REQ, 0x0f);
-				printf("Pole failed! Requiring slave mode.\n");
-			}
-			break;	
+				if(i >= MAX_TRY){
+					Send_CMD(GET_REQ, 0x0f);
+					printf("Pole failed! Requiring slave mode.\n");
+				}
+				break;	
 
 		}
 	}
-
+	sleep(2);
+	return 0;
 }
 
 int JEAN_send_master(char *data, int len, unsigned char priority, unsigned char video_analyse)
@@ -1042,9 +1046,12 @@ int main(){
 
 	ret = JEAN_init_master(server_port, local_port, server_ip_1);
 	if(ret < 0)
+	{
+		printf("ret = %d\n", ret);
 		return ret;
+	}
 
-	init_CMD_CHAN();
+	ret = init_CMD_CHAN();
 	if(ret < 0)
 		return ret;
 
@@ -1052,20 +1059,19 @@ int main(){
 	while(i < 10000)
 	{	
 		usleep(5000);
-		data[4] = '0' + i%2;
+//		data[4] = '0' + i%2;
 //		JEAN_send_master(data, sizeof(data), 4, 0);
 //		printRingStatus();
 
 //		len = JEAN_recv_master(data, sizeof(data), 1, 0);
 //		if(len > 0)
 //			printf("recv: %s %d\n", data, len);
-
+	
 		send_cmd("cmd_test", 9);
 		i++;
 	}
-	
-	close_CMD_CHAN();
 
+	close_CMD_CHAN();
 	JEAN_close_master();
 	return 0;
 }

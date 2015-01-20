@@ -530,7 +530,7 @@ void* cmdThread(void *arg)
 	struct sockaddr_in pin1;
 	struct sockaddr_in pin2;
 	int sfd1;
-	int address_size;
+	int address_size = sizeof(struct sockaddr);
 	int len1 = 0;
 	pthread_t rec_id;
 
@@ -561,6 +561,9 @@ void* cmdThread(void *arg)
 	{   
 		c1fd = accept(sfd1,(struct sockaddr *)&pin1, &address_size);
 		c2fd = accept(sfd1,(struct sockaddr *)&pin2, &address_size);
+#if PRINT
+		printf("%d %d\n", c1fd, c2fd);
+#endif
 		if(c1fd == -1 || c2fd == -1)
 		{
 			printf("call to accept\n");
@@ -905,13 +908,28 @@ int main(){
 				break;
 
 			case CMD_CHAN:
-				Send_CMD(GET_REQ, 0x1);
 				cmdSign = 1;
 				memset(buf1, 0 ,sizeof(buf1));
 				memset(buf2, 0 ,sizeof(buf2));
-				printf("Entering cmd thread!\n");
-				if(cmdThreadRunning == 0)
-					pthread_create(&cmd_id, NULL, cmdThread, NULL);
+				if(recv_str[23] == 'M')
+				{
+					printf("Entering cmd thread!\n");
+					while(cmdThreadRunning == 1)
+					{
+						cmdSign = 0;
+						connectSign = 0;
+						usleep(100);
+					}
+
+					if(cmdThreadRunning == 0)
+						pthread_create(&cmd_id, NULL, cmdThread, NULL);
+				}
+				else
+				{
+					if(cmdThreadRunning == 0)
+						break;
+				}
+				Send_CMD(GET_REQ, 0x1);
 				break;
 
 		}

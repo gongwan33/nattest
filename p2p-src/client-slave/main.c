@@ -189,11 +189,13 @@ int Send_TURN(){
 int Send_CMDOPEN(){
 	char Sen_W;
 	Sen_W = CMD_CHAN;
+	char id = 'S';
 	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
 
 	ip_info[0] = Sen_W;
 	memcpy(ip_info + 1, USERNAME, 10);
 	memcpy(ip_info + 12, PASSWD, 10);
+	ip_info[23] = id;
 	memcpy(ip_info + 34, &host_sin, sizeof(struct sockaddr_in));
 
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
@@ -433,6 +435,8 @@ int close_CMD_CHAN()
 int send_cmd(char *data, int len)
 {
 	int sendLen = 0;
+	if(len < 0)
+		return -1;
 	sendLen = send(cmdfd, data, len, 0);
 	if(sendLen == -1)
 	{
@@ -907,6 +911,7 @@ int JEAN_init_slave(int setServerPort, int setLocalPort, char *setIp)
 
 				clean_rec_buff();
 				for(i = 0; i < MAX_TRY + 1 ; i++){
+					sleep(1);
 					printf("require cmd channel open \n");
 					Send_CMDOPEN();
 					char result = 0;
@@ -914,7 +919,6 @@ int JEAN_init_slave(int setServerPort, int setLocalPort, char *setIp)
 					recvfrom(sockfd, Ctl_Rec, sizeof(Ctl_Rec), 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 					if(Ctl_Rec[0] == GET_REQ) 
 						break;
-					sleep(1);
 				}
 
 				if(i >= MAX_TRY + 1) return OUT_TRY;
@@ -949,7 +953,7 @@ int JEAN_init_slave(int setServerPort, int setLocalPort, char *setIp)
 
 		}
 	}
-
+	return 0;
 }
 
 int JEAN_send_slave(char *data, int len, unsigned char priority, unsigned char video_analyse)
