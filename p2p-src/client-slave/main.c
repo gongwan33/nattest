@@ -765,6 +765,12 @@ int JEAN_init_slave(int setServerPort, int setLocalPort, char *setIp)
     recvProcessBackBuf = (char*)malloc(MAX_RECV_BUF);
 
     initRing();	
+	
+    if (pthread_mutex_init(&recvBuf_lock, NULL) != 0) 
+	{
+		printf("mutex init error\n");
+		return -1;
+	}
 
 	ret = local_net_init(setLocalPort);
 	if(ret < 0){
@@ -1049,6 +1055,7 @@ int JEAN_close_slave()
 	free(recvProcessBackBuf);
 	emptyRing();
 
+	pthread_mutex_destroy(&recvBuf_lock);
 	close(sockfd);
 	return 0;
 }

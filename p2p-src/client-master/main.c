@@ -755,6 +755,13 @@ int JEAN_init_master(int serverPort, int localPort, char *setIp)
     recvProcessBackBuf = (char*)malloc(MAX_RECV_BUF);
 
     initRing();	
+
+	if (pthread_mutex_init(&recvBuf_lock, NULL) != 0) 
+	{
+		printf("mutex init error\n");
+		return -1;
+	}
+
 	ret = local_net_init(localPort);
 	if(ret < 0){
 		printf("Local bind failed!!%d\n", ret);
@@ -1031,6 +1038,7 @@ int JEAN_close_master()
 
 	if(i >= MAX_TRY + 1) return OUT_TRY;
 
+	pthread_mutex_destroy(&recvBuf_lock);
 	free(recvBuf);
 	free(recvProcessBuf);
 	free(recvProcessBackBuf);

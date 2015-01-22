@@ -562,7 +562,7 @@ void* cmdThread(void *arg)
 		c1fd = accept(sfd1,(struct sockaddr *)&pin1, &address_size);
 		c2fd = accept(sfd1,(struct sockaddr *)&pin2, &address_size);
 #if PRINT
-		printf("%d %d\n", c1fd, c2fd);
+		printf("master and client accepted: %d %d\n", c1fd, c2fd);
 #endif
 		if(c1fd == -1 || c2fd == -1)
 		{
