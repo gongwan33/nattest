@@ -22,17 +22,21 @@
 #define PORT1 61000
 #define TURN_PORT 61001
 #define CMD_PORT 61002
+#define CONTROL_PORT 61003
 
 #define PEER_SHEET_LEN 200
 #define UNAME "wang"
 #define PASSWD "123456"
 
 #define cmdBufSize 1024*5
+#define controlBufSize 1024*5
 
 static char pathname[50] = "./natinfo.log";
 static int sfd;
 static int c1fd;
+static int controlC1fd;
 static int c2fd;
+static int controlC2fd;
 static int turnSfd;
 static struct sockaddr_in sin, recv_sin;	
 static struct sockaddr_in turn_recv_sin;	
@@ -43,11 +47,14 @@ static char Uname[10];
 static char Passwd[10];
 static char turnSign = 0;
 static char cmdSign = 0;
+static char controlSign = 0;
 static pthread_t turn_id;
 static pthread_t cmd_id;
 static char turnThreadRunning = 0;
 static char cmdThreadRunning = 0;
+static char controlThreadRunning = 0;
 static int connectSign = 0;
+static int controlConnectSign = 0;
 
 static int  Peers_Sheet_Index = 0;
 static struct node_net *Peer_Login;
@@ -55,8 +62,11 @@ static char *recvProcessBuf;
 static int recvProcessBufP = 0;
 
 static char buf1[cmdBufSize];
+static char controlBuf1[controlBufSize];
 static char buf2[cmdBufSize];
+static char controlBuf2[controlBufSize];
 static char peerInSign = 0;
+static char controlPeerInSign = 0;
 
 int local_net_init(){
 	bzero(&sin, sizeof(sin));
@@ -637,6 +647,116 @@ void* cmdThread(void *arg)
 	cmdThreadRunning = 0;
 }
 
+void* controlThread_recv2(void * argc)
+{
+	pthread_detach(pthread_self());
+
+	int len2 = 0;
+
+	while(controlConnectSign == 1)
+	{
+		len2 = recv(controlC2fd, controlBuf2, controlBufSize, 0); 
+
+			if(len2 == -1)
+			{
+				printf("control:call to recv\n");
+			}
+			else if(len2 > 0)
+			{
+				if(send(controlC1fd, controlBuf2, len2, 0) == -1)
+				{
+					printf("control:call to send\n");
+				}
+			}
+	}
+
+}
+
+void* controlThread(void *arg)
+{
+	controlThreadRunning = 1;
+
+	pthread_detach(pthread_self());
+	struct sockaddr_in sin1;
+	struct sockaddr_in sin2;
+	struct sockaddr_in pin1;
+	struct sockaddr_in pin2;
+	int sfd1;
+	int address_size = sizeof(struct sockaddr);
+	int len1 = 0;
+	pthread_t rec_id;
+
+	sfd1 = socket(AF_INET, SOCK_STREAM, 0);
+
+	if(sfd1 == -1)
+	{
+		printf("control:call to socket\n");
+	}
+
+	bzero(&sin1,sizeof(sin1));
+	sin1.sin_family = AF_INET;
+	sin1.sin_addr.s_addr = INADDR_ANY;
+	sin1.sin_port = htons(CONTROL_PORT);
+
+	if(bind(sfd1, (struct sockaddr *)&sin1, sizeof(sin1)) == -1)
+	{
+		printf("control:call to bind\n");
+	}
+
+	if(listen(sfd1, 20) == -1) 
+	{
+		printf("control:call to listen\n");
+	}
+
+
+	controlPeerInSign = 0;
+	while(controlSign == 1)
+	{   
+		controlC1fd = accept(sfd1,(struct sockaddr *)&pin1, &address_size);
+		controlC2fd = accept(sfd1,(struct sockaddr *)&pin2, &address_size);
+		controlPeerInSign = 1;
+#if PRINT
+		printf("control: master and client accepted: %d %d\n", c1fd, c2fd);
+#endif
+		if(controlC1fd == -1 || controlC2fd == -1)
+		{
+			printf("control: call to accept\n");
+			continue;
+		}
+		else
+		{
+			controlConnectSign = 1;
+			pthread_create(&rec_id, NULL, controlThread_recv2, NULL);
+		}
+
+		while(controlConnectSign == 1)
+		{
+			len1 = recv(controlC1fd, controlBuf1, controlBufSize, 0); 
+
+			if(len1 == -1)
+			{
+				printf("control:call to recv\n");
+			}
+			else if(len1 > 0)
+			{
+				if(send(controlC2fd, controlBuf1, len1, 0) == -1)
+				{
+					printf("control: call to send\n");
+				}
+			}
+
+		}
+
+		controlConnectSign = 0;
+		close(controlC1fd);
+		close(controlC2fd);
+	}
+
+	close(sfd1);
+	controlPeerInSign = 0;
+	controlThreadRunning = 0;
+}
+
 int main(){
 	int ret = 0;
 	char Get_W;
@@ -973,12 +1093,42 @@ int main(){
 				Send_CMD(GET_REQ, 0x1);
 				break;
 
+			case CONTROL_CHAN:
+				controlSign = 1;
+				memset(controlBuf1, 0 ,sizeof(controlBuf1));
+				memset(controlBuf2, 0 ,sizeof(controlBuf2));
+				if(recv_str[23] == 'M')
+				{
+					printf("Entering control thread!\n");
+					while(controlPeerInSign == 1)
+					{
+						controlSign = 0;
+						controlConnectSign = 0;
+						usleep(100);
+					}
+
+					if(controlThreadRunning == 0)
+					{
+						controlThreadRunning = 1;
+						pthread_create(&cmd_id, NULL, controlThread, NULL);
+					}
+				}
+				else
+				{
+					if(controlThreadRunning == 0)
+						break;
+				}
+				Send_CMD(GET_REQ, 0x1);
+				break;
+
 		}
 	}
 
 	connectSign = 0;
+	controlConnectSign = 0;
 	turnSign = 0;
 	cmdSign = 0;
+	controlSign = 0;
 	free(recv_str);
 	empty_item();
 	close(sfd);

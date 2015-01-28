@@ -22,6 +22,7 @@
 #define TURN_REQ	0x10
 #define MASTER_QUIT 0x11
 #define CMD_CHAN    0x12
+#define CONTROL_CHAN    0x13
 
 #define EXT_CMD		0xff
 
@@ -47,6 +48,10 @@ struct load_head {
 	unsigned char priority;
 	u_int64_t length;
 	unsigned char direction;//direction = 0, to master; direction = 1, to slave
+	u_int16_t subIndex;
+	u_int16_t totalIndex;
+	u_int16_t sliceIndex;
+	u_int32_t address;
 };
 
 struct get_head {
@@ -60,3 +65,12 @@ struct retry_head {
     u_int32_t index;
     unsigned char direction;//direction = 0, to master; direction = 1, to slave
 };
+
+struct elm{
+	u_int32_t index;
+	unsigned int start;
+	unsigned int end;
+};
+
+
+
