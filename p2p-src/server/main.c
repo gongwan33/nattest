@@ -56,6 +56,7 @@ static int recvProcessBufP = 0;
 
 static char buf1[cmdBufSize];
 static char buf2[cmdBufSize];
+static char peerInSign = 0;
 
 int local_net_init(){
 	bzero(&sin, sizeof(sin));
@@ -593,6 +594,7 @@ void* cmdThread(void *arg)
 	{   
 		c1fd = accept(sfd1,(struct sockaddr *)&pin1, &address_size);
 		c2fd = accept(sfd1,(struct sockaddr *)&pin2, &address_size);
+		peerInSign = 1;
 #if PRINT
 		printf("master and client accepted: %d %d\n", c1fd, c2fd);
 #endif
@@ -631,6 +633,7 @@ void* cmdThread(void *arg)
 	}
 
 	close(sfd1);
+	peerInSign = 0;
 	cmdThreadRunning = 0;
 }
 
@@ -949,7 +952,7 @@ int main(){
 				if(recv_str[23] == 'M')
 				{
 					printf("Entering cmd thread!\n");
-					while(cmdThreadRunning == 1)
+					while(peerInSign == 1)
 					{
 						cmdSign = 0;
 						connectSign = 0;
