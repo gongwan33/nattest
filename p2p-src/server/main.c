@@ -363,7 +363,7 @@ void* turnThread(void *argc)
 					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
 
 #if PRINT
-					printf("Get \n");
+					printf("Get %d\n", get.index);
 #endif
 
 					p_node = find_item_by_ip(&tRecv_sin);
@@ -393,7 +393,7 @@ void* turnThread(void *argc)
 					memcpy(&retry, recvProcessBuf + scanP, sizeof(struct retry_head));
 
 #if PRINT
-					printf("retry \n");
+					printf("retry %d\n", retry.index);
 #endif
 
 					p_node = find_item_by_ip(&tRecv_sin);
@@ -447,7 +447,7 @@ void* turnThread(void *argc)
 					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
 
 #if PRINT
-					printf("Get \n");
+					printf("Get %d\n", get.index);
 #endif
 
 					p_node = find_item_by_ip(&tRecv_sin);
@@ -476,7 +476,7 @@ void* turnThread(void *argc)
 					memcpy(&retry, recvProcessBuf + scanP, sizeof(struct retry_head));
 
 #if PRINT
-					printf("Retry \n");
+					printf("Retry %d\n", retry.index);
 #endif
 
 					p_node = find_item_by_ip(&tRecv_sin);
