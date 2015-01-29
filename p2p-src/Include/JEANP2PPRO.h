@@ -2,6 +2,8 @@
  *VERSION:1.0
  *FUNCTION:PROTOCOL
  */
+#ifndef JEANP2PPRO_H
+#define JEANP2PPRO_H
 
 //-----------------------------OPCODE DEFINE------------------------------
 #define V_RESP		0x01
@@ -45,7 +47,7 @@ struct load_head {
 	char logo[4];
     u_int32_t index;
 	u_int32_t get_number;
-	unsigned char priority;
+	unsigned priority;
 	u_int64_t length;
 	unsigned char direction;//direction = 0, to master; direction = 1, to slave
 	u_int16_t subIndex;
@@ -56,14 +58,14 @@ struct load_head {
 
 struct get_head {
     char logo[3];
-    u_int32_t index;
-    unsigned char direction;//direction = 0, to master; direction = 1, to slave
 };
- 
-struct retry_head {
+
+struct syn_head {
     char logo[3];
-    u_int32_t index;
-    unsigned char direction;//direction = 0, to master; direction = 1, to slave
+};
+
+struct sok_head {
+    char logo[3];
 };
 
 struct elm{
@@ -72,5 +74,5 @@ struct elm{
 	unsigned int end;
 };
 
-
+#endif
 

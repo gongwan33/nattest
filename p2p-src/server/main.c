@@ -331,7 +331,6 @@ void* turnThread(void *argc)
 			int scanP = 0;
 			struct load_head head;
 			struct get_head get;
-			struct retry_head retry;
 
 			while(scanP + sizeof(struct load_head) < recvProcessBufP)
 			{
@@ -369,67 +368,6 @@ void* turnThread(void *argc)
 					else
 						break;
 				}
-				else if(recvProcessBuf[scanP] == 'G' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'T')
-				{
-					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
-
-#if PRINT
-					printf("Get %d\n", get.index);
-#endif
-
-					p_node = find_item_by_ip(&tRecv_sin);
-					if(p_node != NULL && get.direction == 0) 
-						p_sin = p_node->recv_sin_m;
-					else if(p_node != NULL && get.direction == 1)
-						p_sin = p_node->recv_sin_s;
-
-					if(p_node == NULL){
-						printf("Node not found. Turn request rejected!\n");
-						break;
-					}
-
-					if(p_sin != NULL) 
-					{
-						sendto(sfd, recvProcessBuf + scanP, sizeof(struct get_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
-						usleep(sizeof(struct get_head)/send_delay);
-					}
-					else 
-						printf("Erro: node info lost!\n");
-
-
-					scanP = scanP + sizeof(struct get_head);
-				}
-				else if(recvProcessBuf[scanP] == 'R' && recvProcessBuf[scanP + 1] == 'T' && recvProcessBuf[scanP + 2] == 'Y')
-				{
-					memcpy(&retry, recvProcessBuf + scanP, sizeof(struct retry_head));
-
-#if PRINT
-					printf("retry %d\n", retry.index);
-#endif
-
-					p_node = find_item_by_ip(&tRecv_sin);
-					if(p_node != NULL && retry.direction == 0) 
-						p_sin = p_node->recv_sin_m;
-					else if(p_node != NULL && retry.direction == 1)
-						p_sin = p_node->recv_sin_s;
-
-					if(p_node == NULL){
-						printf("Node not found. Turn request rejected!\n");
-						break;
-					}
-
-					if(p_sin != NULL)
-					{	
-						sendto(sfd, recvProcessBuf + scanP, sizeof(struct retry_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
-						usleep(sizeof(struct retry_head)/send_delay);
-					}
-					else 
-						printf("Erro: node info lost!\n");
-
-
-					scanP = scanP + sizeof(struct retry_head);
-				}
-
 				else
 					scanP++;
 			}
@@ -444,90 +382,6 @@ void* turnThread(void *argc)
 				recvProcessBufP -= scanP;
 				memcpy(recvProcessBuf, recvProcessBuf + scanP, recvProcessBufP);
 			}
-		}
-		else if(recvProcessBufP >= sizeof(struct get_head))
-		{
-			int scanP = 0;
-			struct get_head get;
-			struct retry_head retry;
-
-			while(scanP + sizeof(struct get_head) <= recvProcessBufP)
-			{
-				if(recvProcessBuf[scanP] == 'G' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'T')
-				{
-					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
-
-#if PRINT
-					printf("Get %d\n", get.index);
-#endif
-
-					p_node = find_item_by_ip(&tRecv_sin);
-					if(p_node != NULL && get.direction == 0) 
-						p_sin = p_node->recv_sin_m;
-					else if(p_node != NULL && get.direction == 1)
-						p_sin = p_node->recv_sin_s;
-
-					if(p_node == NULL){
-						printf("Node not found. Turn request rejected!\n");
-						break;
-					}
-
-					if(p_sin != NULL) 
-					{
-						sendto(sfd, recvProcessBuf + scanP, sizeof(struct get_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
-						usleep(sizeof(struct get_head)/send_delay);
-					}
-					else 
-						printf("Erro: node info lost!\n");
-
-					scanP = scanP + sizeof(struct get_head);
-				}
-				else if(recvProcessBuf[scanP] == 'R' && recvProcessBuf[scanP + 1] == 'T' && recvProcessBuf[scanP + 2] == 'Y')
-				{
-					memcpy(&retry, recvProcessBuf + scanP, sizeof(struct retry_head));
-
-#if PRINT
-					printf("Retry %d\n", retry.index);
-#endif
-
-					p_node = find_item_by_ip(&tRecv_sin);
-					if(p_node != NULL && retry.direction == 0) 
-						p_sin = p_node->recv_sin_m;
-					else if(p_node != NULL && retry.direction == 1)
-						p_sin = p_node->recv_sin_s;
-
-					if(p_node == NULL){
-						printf("Node not found. Turn request rejected!\n");
-						break;
-					}
-
-					if(p_sin != NULL) 
-					{
-						sendto(sfd, recvProcessBuf + scanP, sizeof(struct retry_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
-						usleep(sizeof(struct retry_head)/send_delay);
-					}
-					else 
-						printf("Erro: node info lost!\n");
-
-
-					scanP = scanP + sizeof(struct retry_head);
-				}
-
-				else
-					scanP++;
-			}
-
-			if(scanP == recvProcessBufP)
-			{
-				recvProcessBufP = 0;
-				continue;
-			}
-			else if(scanP < recvProcessBufP)
-			{
-				recvProcessBufP -= scanP;
-				memcpy(recvProcessBuf, recvProcessBuf + scanP, recvProcessBufP);
-			}
-
 		}
 
 	}
