@@ -511,17 +511,17 @@ void* controlThread_recv2(void * argc)
 	{
 		len2 = recv(controlC2fd, controlBuf2, controlBufSize, 0); 
 
-			if(len2 == -1)
+		if(len2 == -1)
+		{
+			printf("control:call to recv\n");
+		}
+		else if(len2 > 0)
+		{
+			if(send(controlC1fd, controlBuf2, len2, 0) == -1)
 			{
-				printf("control:call to recv\n");
+				printf("control:call to send\n");
 			}
-			else if(len2 > 0)
-			{
-				if(send(controlC1fd, controlBuf2, len2, 0) == -1)
-				{
-					printf("control:call to send\n");
-				}
-			}
+		}
 	}
 
 }
