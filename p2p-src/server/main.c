@@ -344,7 +344,7 @@ void* turnThread(void *argc)
 						}
 
 						if(p_sin != NULL) 
-							sendto(turnSfd, recvProcessBuf + scanP, sizeof(struct load_head) + head.length, 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+							sendto(sfd, recvProcessBuf + scanP, sizeof(struct load_head) + head.length, 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
 						else 
 							printf("Erro: node info lost!\n");
 
@@ -370,7 +370,7 @@ void* turnThread(void *argc)
 					}
 
 					if(p_sin != NULL) 
-						sendto(turnSfd, recvProcessBuf + scanP, sizeof(struct get_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+						sendto(sfd, recvProcessBuf + scanP, sizeof(struct get_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
 					else 
 						printf("Erro: node info lost!\n");
 
@@ -393,7 +393,7 @@ void* turnThread(void *argc)
 					}
 
 					if(p_sin != NULL) 
-						sendto(turnSfd, recvProcessBuf + scanP, sizeof(struct retry_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+						sendto(sfd, recvProcessBuf + scanP, sizeof(struct retry_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
 					else 
 						printf("Erro: node info lost!\n");
 
@@ -428,6 +428,10 @@ void* turnThread(void *argc)
 				{
 					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
 
+#if PRINT
+					printf("Get \n");
+#endif
+
 					p_node = find_item_by_ip(&tRecv_sin);
 					if(p_node != NULL && get.direction == 0) 
 						p_sin = p_node->recv_sin_m;
@@ -440,7 +444,7 @@ void* turnThread(void *argc)
 					}
 
 					if(p_sin != NULL) 
-						sendto(turnSfd, recvProcessBuf + scanP, sizeof(struct get_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+						sendto(sfd, recvProcessBuf + scanP, sizeof(struct get_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
 					else 
 						printf("Erro: node info lost!\n");
 
@@ -462,7 +466,7 @@ void* turnThread(void *argc)
 					}
 
 					if(p_sin != NULL) 
-						sendto(turnSfd, recvProcessBuf + scanP, sizeof(struct retry_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
+						sendto(sfd, recvProcessBuf + scanP, sizeof(struct retry_head), 0, (struct sockaddr *)p_sin, sizeof(struct sockaddr));
 					else 
 						printf("Erro: node info lost!\n");
 
@@ -901,10 +905,13 @@ int main(){
 			case TURN_REQ:
 				Send_CMD(GET_REQ, 0x1);
 				turnSign = 1;
-				printf("Entering turn thread!\n");
+				printf("Entering turn thread! runSign %d\n", turnThreadRunning);
 				recvProcessBufP = 0;
 				if(turnThreadRunning == 0)
+				{
+					turnThreadRunning = 1;
 					pthread_create(&turn_id, NULL, turnThread, NULL);
+				}
 				break;
 
 			case CMD_CHAN:
@@ -922,7 +929,10 @@ int main(){
 					}
 
 					if(cmdThreadRunning == 0)
+					{
+						cmdThreadRunning = 1;
 						pthread_create(&cmd_id, NULL, cmdThread, NULL);
+					}
 				}
 				else
 				{
