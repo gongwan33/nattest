@@ -49,8 +49,7 @@ struct load_head {
 	char priority;
 	u_int64_t length;
 	unsigned char direction;//direction = 0, to master; direction = 1, to slave
-	u_int16_t subIndex;
-	u_int16_t totalIndex;
+	u_int32_t totalLen;
 	u_int16_t sliceIndex;
 	u_int32_t address;
 };
