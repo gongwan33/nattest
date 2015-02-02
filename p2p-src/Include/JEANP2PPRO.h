@@ -66,6 +66,10 @@ struct sok_head {
     char logo[3];
 };
 
+struct win_head {
+    char logo[3];
+};
+
 struct elm{
 	u_int32_t index;
 	unsigned int start;
