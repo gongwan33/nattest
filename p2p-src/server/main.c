@@ -187,6 +187,7 @@ int Send_S_IP(char * name){
 					set_rec_timeout(0, 0);	
 					return 0;
 				}
+				scanP += sizeof(struct p2p_head);
 			}
 			else
 				scanP++;
@@ -647,7 +648,7 @@ int main(){
 	struct load_head turnHead;
 	int length = 0;
 	char priority;
-	unsigned int recvLen = 0;
+	int recvLen = 0;
 	int scanP = 0;
 	struct p2p_head head;
 
@@ -665,8 +666,9 @@ int main(){
 
 	printf("------------------- Welcome to JEAN P2P SYSTEM ---------------------\n");
 
-	set_rec_timeout(0, 0);//(usec, sec)
-	while(1){	
+		set_rec_timeout(0, 0);//(usec, sec)
+	while(1)
+	{	
 		recvLen = 0;
 		if(recv_strP > MAX_RECV_BUF - RECV_LEN)
 		{
@@ -691,7 +693,7 @@ int main(){
 
 				Get_W = V_UAP;
 
-				scanP = scanP + sizeof(struct load_head);
+				scanP = scanP + sizeof(struct p2p_head);
 			}
 			else if(recv_str[scanP] == 'G' && recv_str[scanP + 1] == 'R' && recv_str[scanP + 2] == 'Q')
 			{
@@ -699,7 +701,7 @@ int main(){
 
 				Get_W = GET_REQ;
 
-				scanP = scanP + sizeof(struct load_head);
+				scanP = scanP + sizeof(struct p2p_head);
 			}
 			else if(recv_str[scanP] == 'S' && recv_str[scanP + 1] == 'U' && recv_str[scanP + 2] == 'P')
 			{
@@ -707,7 +709,7 @@ int main(){
 
 				Get_W = V_UAP_S;
 
-				scanP = scanP + sizeof(struct load_head);
+				scanP = scanP + sizeof(struct p2p_head);
 			}
 			else if(recv_str[scanP] == 'M' && recv_str[scanP + 1] == 'I' && recv_str[scanP + 2] == 'P')
 			{
@@ -715,7 +717,7 @@ int main(){
 
 				Get_W = REQ_M_IP;
 
-				scanP = scanP + sizeof(struct load_head);
+				scanP = scanP + sizeof(struct p2p_head);
 			}
 			else if(recv_str[scanP] == 'P' && recv_str[scanP + 1] == 'O' && recv_str[scanP + 2] == 'L')
 			{
@@ -723,8 +725,17 @@ int main(){
 
 				Get_W = POL_SENT;
 
-				scanP = scanP + sizeof(struct load_head);
+				scanP = scanP + sizeof(struct p2p_head);
 			}
+			else if(recv_str[scanP] == 'C' && recv_str[scanP + 1] == 'M' && recv_str[scanP + 2] == 'D')
+			{
+				memcpy(&head, recv_str + scanP, sizeof(struct p2p_head));
+
+				Get_W = CMD_CHAN;
+
+				scanP = scanP + sizeof(struct p2p_head);
+			}
+
 			else
 			{
 				scanP++;
@@ -919,18 +930,18 @@ printf("Get_W %d\n", Get_W);
 						}
 
 						int recvLen = 0;
-						int scanP = 0;
+						int scanP_l = 0;
 						int okSign = 0;
 						recvLen = recvfrom(sfd, recv_str + recv_strP, RECV_LEN, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 						if(recvLen <= 0)
 							continue;
 
-						while(recvLen - scanP >= sizeof(struct p2p_head))
+						while(recvLen - scanP_l >= sizeof(struct p2p_head))
 						{
-							if(recv_str[scanP + recv_strP == 'G'] && recv_str[scanP + recv_strP + 1] == 'R' && recv_str[scanP + recv_strP + 2] == 'Q')
+							if(recv_str[scanP_l + recv_strP == 'G'] && recv_str[scanP_l + recv_strP + 1] == 'R' && recv_str[scanP_l + recv_strP + 2] == 'Q')
 							{
 								struct p2p_head head;
-								memcpy(&head, recv_str + scanP + recv_strP, sizeof(struct p2p_head));
+								memcpy(&head, recv_str + scanP_l + recv_strP, sizeof(struct p2p_head));
 
 								if(head.data[0] == 0x0e){
 									printf("Pole ok! Connection established.\n");
@@ -947,9 +958,10 @@ printf("Get_W %d\n", Get_W);
 								}
 								else if(head.data[0] == 0x12)
 									cmd_sent = 1;
+								scanP_l += sizeof(struct p2p_head);
 							}
 							else
-								scanP++;
+								scanP_l++;
 						}
 						if(okSign == 1)
 							break;
@@ -979,18 +991,18 @@ printf("Get_W %d\n", Get_W);
 							}
 
 							int recvLen = 0;
-							int scanP = 0;
+							int scanP_l = 0;
 							int okSign = 0;
 							recvLen = recvfrom(sfd, recv_str + recv_strP, RECV_LEN, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 							if(recvLen <= 0)
 								continue;
 
-							while(recvLen - scanP >= sizeof(struct p2p_head))
+							while(recvLen - scanP_l >= sizeof(struct p2p_head))
 							{
-								if(recv_str[scanP + recv_strP == 'G'] && recv_str[scanP + recv_strP + 1] == 'R' && recv_str[scanP + recv_strP + 2] == 'Q')
+								if(recv_str[scanP_l + recv_strP == 'G'] && recv_str[scanP_l + recv_strP + 1] == 'R' && recv_str[scanP_l + recv_strP + 2] == 'Q')
 								{
 									struct p2p_head head;
-									memcpy(&head, recv_str + scanP + recv_strP, sizeof(struct p2p_head));
+									memcpy(&head, recv_str + scanP_l + recv_strP, sizeof(struct p2p_head));
 
 									if(head.data[0] == 0x10){
 										printf("Pole ok! Connection established.\n");
@@ -1004,9 +1016,10 @@ printf("Get_W %d\n", Get_W);
 									}
 									else if(head.data[0] == 0x13)
 										cmd_sent = 1;
+									scanP_l += sizeof(struct p2p_head);
 								}
 								else
-									scanP++;
+									scanP_l++;
 							}
 							if(okSign == 1)
 								break;
@@ -1039,26 +1052,27 @@ printf("Get_W %d\n", Get_W);
 						}
 
 						int recvLen = 0;
-						int scanP = 0;
+						int scanP_l = 0;
 						int okSign = 0;
 						recvLen = recvfrom(sfd, recv_str + recv_strP, RECV_LEN, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 						if(recvLen <= 0)
 							continue;
 
-						while(recvLen - scanP >= sizeof(struct p2p_head))
+						while(recvLen - scanP_l >= sizeof(struct p2p_head))
 						{
-							if(recv_str[scanP + recv_strP == 'G'] && recv_str[scanP + recv_strP + 1] == 'R' && recv_str[scanP + recv_strP + 2] == 'Q')
+							if(recv_str[scanP_l + recv_strP == 'G'] && recv_str[scanP_l + recv_strP + 1] == 'R' && recv_str[scanP_l + recv_strP + 2] == 'Q')
 							{
 								struct p2p_head head;
-								memcpy(&head, recv_str + scanP + recv_strP, sizeof(struct p2p_head));
+								memcpy(&head, recv_str + scanP_l + recv_strP, sizeof(struct p2p_head));
 
 								if(head.data[0] == 0x14){
 									okSign = 1;
 									break;
 								}
+								scanP_l += sizeof(struct p2p_head);
 							}
 							else
-								scanP++;
+								scanP_l++;
 						}
 						if(okSign == 1)
 							break;
@@ -1087,7 +1101,7 @@ printf("Get_W %d\n", Get_W);
 					cmdSign = 1;
 					memset(buf1, 0 ,sizeof(buf1));
 					memset(buf2, 0 ,sizeof(buf2));
-					if(recv_str[23] == 'M')
+					if(head.data[0] == 'M')
 					{
 						printf("Entering cmd thread!\n");
 						while(peerInSign == 1)

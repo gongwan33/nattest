@@ -214,18 +214,11 @@ int Send_TURN(){
 }
 
 int Send_CMDOPEN(){
-	char Sen_W;
-	Sen_W = CMD_CHAN;
-	char id = 'M';
-	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
+	struct p2p_head head;
+	memcpy(&head.logo, "CMD", 3);
+	head.data[0] = 'M';
 
-	ip_info[0] = Sen_W;
-	memcpy(ip_info + 1, USERNAME, 10);
-	memcpy(ip_info + 12, PASSWD, 10);
-	ip_info[23] = id;
-	memcpy(ip_info + 34, &host_sin, sizeof(struct sockaddr_in));
-
-	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	sendto(sockfd, &head, sizeof(struct p2p_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	return 0;
 }
 
@@ -957,6 +950,6 @@ int main(){
 //	}
 //
 //	close_CMD_CHAN();
-	JEAN_close_master();
+//	JEAN_close_master();
 	return 0;
 }
