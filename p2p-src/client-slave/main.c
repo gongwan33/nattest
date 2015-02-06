@@ -203,37 +203,49 @@ int Send_CMDOPEN(){
 }
 
 int Send_VUAPS(){
-	char Sen_W;
-	Sen_W = V_UAP_S;
-	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
+	struct p2p_head head;
+	memcpy(&head.logo, "SUP", 3);
+	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) 
+		return -1;
 
-	ip_info[0] = Sen_W;
-	memcpy(ip_info + 1, USERNAME, 10);
-	memcpy(ip_info + 12, PASSWD, 10);
-	memcpy(ip_info + 34, &host_sin, sizeof(struct sockaddr_in));
+	memcpy(head.data, USERNAME, 10);
+	memcpy(head.data + 10, PASSWD, 10);
+	memcpy(head.data + 20, &host_sin, sizeof(struct sockaddr_in));
 
-	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	sendto(sockfd, &head, sizeof(struct p2p_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	return 0;
 }
 
 void Send_IP_REQ(){
-	char Sen_W;
-	Sen_W = REQ_M_IP;
-	sprintf(ip_info,"%c %s", Sen_W, USERNAME);
-	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	struct p2p_head head;
+	memcpy(&head.logo, "MIP", 3);
+	memcpy(head.data, USERNAME, 10);
+	sendto(sockfd, &head, sizeof(struct p2p_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
 
 void Send_POL(char req,struct sockaddr_in * sock){
-	ip_info[0] = req;
-	if(req == POL_SENT) 
-		memcpy(ip_info + 1, USERNAME, 10);
-	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)sock, sizeof(struct sockaddr_in));
+	struct p2p_head head;
+	if(req == POL_SENT)
+	{
+		memcpy(&head.logo, "POL", 3);
+		memcpy(head.data, USERNAME, 10);
+		sendto(sockfd, &head, sizeof(struct p2p_head), 0, (struct sockaddr *)sock, sizeof(struct sockaddr_in));
+		return;
+	}
+	else
+	{
+		ip_info[0] = req;
+		sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)sock, sizeof(struct sockaddr_in));
+		return;
+	}
 }
 
 void Send_CMD(char Ctls, char Res){
-	ip_info[0] = Ctls;
-	ip_info[1] = Res;
-	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	struct p2p_head head;
+	if(Ctls == GET_REQ)
+		memcpy(head.logo, "GRQ", 3);
+	head.data[0] = Res;
+	sendto(sockfd, &head, sizeof(struct p2p_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
 
 void Send_CMD_TO_MASTER(char Ctls, char Res){
@@ -267,8 +279,6 @@ void sendGet(unsigned int index)
 	struct get_head getSt;
 
 	memcpy(&getSt, "GET", 3);
-	getSt.index = index;
-	getSt.direction = 0;
 
 #if TEST_LOST
 	int rnd = 0;
@@ -293,80 +303,6 @@ void sendGet(unsigned int index)
 	}
 #endif
 
-}
-
-void sendRetry(unsigned int index)
-{
-	struct retry_head getSt;
-	memcpy(&getSt, "RTY", 3);
-    getSt.index = index;
-    getSt.direction = 0;
-
-//    printf("retry %d\n", index);
-#if TEST_LOST
-	int rnd = 0;
-	int lost_emt = LOST_PERCENT;
-	rnd = rand()%100;
-	if(rnd <= lost_emt)
-	    printf("Lost!!: rnd = %d, lost_emt = %d, lost_posibility = %d percent\n", rnd, lost_emt, lost_emt);
-
-	if(rnd > lost_emt)
-	{
-#endif
-
-    if(connectionStatus == P2P)
-	{
-	    sendto(sockfd, &getSt, sizeof(struct retry_head), 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
-	}
-	else if(connectionStatus == TURN)
-	{
-	    sendto(sockfd, &getSt, sizeof(struct retry_head), 0, (struct sockaddr *)&turnaddr, sizeof(turnaddr));
-	}
-
-#if TEST_LOST
-	}
-#endif
-
-}
-
-
-void resend(char *data, int len, u_int32_t index)
-{
-	struct load_head tLoad;
-	memset(&tLoad, 0, sizeof(struct load_head));
-	if(len == 0 || data == 0)
-	{
-		memcpy(&tLoad.logo, "JEAN", 4);
-		tLoad.index = index;
-		tLoad.length = 0;
-		tLoad.priority = 0;
-		tLoad.direction = 0;
-		data = (char *)&tLoad;
-	}
-
-#if TEST_LOST
-	int rnd = 0;
-	int lost_emt = LOST_PERCENT;
-	rnd = rand()%100;
-	if(rnd <= lost_emt)
-	    printf("Lost!!: rnd = %d, lost_emt = %d, lost_posibility = %d percent\n", rnd, lost_emt, lost_emt);
-
-	if(rnd > lost_emt)
-	{
-#endif
-
-    if(connectionStatus == P2P)
-	{
-	    sendto(sockfd, data, len + sizeof(struct load_head), 0, (struct sockaddr *)&master_sin, sizeof(struct sockaddr_in));
-	}
-	else if(connectionStatus == TURN)
-	{
-	    sendto(sockfd, data, len + sizeof(struct load_head), 0, (struct sockaddr *)&turnaddr, sizeof(turnaddr));
-	}
-
-#if TEST_LOST
-	}
-#endif
 }
 
 int findIndexInBuf(char *buf, int *start, int *end, int *datLen, u_int32_t index)
@@ -539,7 +475,6 @@ void* recvData(void *argc)
 			int scanP = 0;
 			struct load_head head;
 			struct get_head get;
-			struct retry_head retry;
 
 			while(scanP + sizeof(struct load_head) < recvProcessBufP)
 			{
@@ -594,7 +529,6 @@ void* recvData(void *argc)
 						pauseSign = 1;
 						for(i = 1;i < lostNum; i++)
 						{
-							sendRetry(lastIndex + i);
 						}
 
 						if(recvProcessBackBufP + recvProcessBufP - scanP < MAX_RECV_BUF)
@@ -652,30 +586,8 @@ void* recvData(void *argc)
 #if PRINT
 					printf("get index: %d\n", get.index);
 #endif
-					unreg_buff(get.index);
 					scanP = scanP + sizeof(struct get_head);
 				}
-				else if(recvProcessBuf[scanP] == 'R' && recvProcessBuf[scanP + 1] == 'T' && recvProcessBuf[scanP + 2] == 'Y')
-				{
-#if PRINT
-						printf("resend pack!!\n");
-#endif
-
-					int rLen = 0;
-					int rPrio = 0;
-					memcpy(&retry, recvProcessBuf + scanP, sizeof(struct retry_head));
-					retryData = getPointerByIndex(retry.index, &rLen, &rPrio);
-					if(retryData != NULL)
-					{
-						resend(retryData, rLen, retry.index);
-					}
-					else
-					{
-						resend(retryData, 0, retry.index);
-					}
-					scanP = scanP + sizeof(struct retry_head);
-				}
-
 				else
 					scanP++;
 			}
@@ -695,37 +607,15 @@ void* recvData(void *argc)
 		{
 			int scanP = 0;
 			struct get_head get;
-			struct retry_head retry;
 
 			while(scanP + sizeof(struct get_head) <= recvProcessBufP)
 			{
 				if(recvProcessBuf[scanP] == 'G' && recvProcessBuf[scanP + 1] == 'E' && recvProcessBuf[scanP + 2] == 'T')
 				{
 					memcpy(&get, recvProcessBuf + scanP, sizeof(struct get_head));
-					unreg_buff(get.index);
+//					unreg_buff(get.index);
 					scanP = scanP + sizeof(struct get_head);
 				}
-				else if(recvProcessBuf[scanP] == 'R' && recvProcessBuf[scanP + 1] == 'T' && recvProcessBuf[scanP + 2] == 'Y')
-				{
-#if PRINT
-						printf("resend pack!!\n");
-#endif
-
-					int rLen = 0;
-					int rPrio = 0;
-					memcpy(&retry, recvProcessBuf + scanP, sizeof(struct retry_head));
-					retryData = getPointerByIndex(retry.index, &rLen, &rPrio);
-					if(retryData != NULL)
-					{
-						resend(retryData, rLen, retry.index);
-					}
-					else
-					{
-						resend(retryData, 0, retry.index);
-					}
-					scanP = scanP + sizeof(struct retry_head);
-				}
-
 				else
 					scanP++;
 			}
@@ -970,7 +860,6 @@ int JEAN_send_slave(char *data, int len, unsigned char priority, unsigned char v
 	buffer = (char *)malloc(len + sizeof(struct load_head));
 	memcpy(lHead.logo, "JEAN", 4);
 	lHead.index = sendIndex;
-	lHead.get_number = getNum;
 	lHead.priority = priority;
 	lHead.length = len;
 	lHead.direction = 0;
@@ -1069,28 +958,28 @@ int main(){
 	if(ret < 0)
 		return ret;
 
-	ret = init_CMD_CHAN();
-	if(ret < 0)
-		return ret;
-
-	int i = 0;
-	while(i < 10000)
-	{
-//		len = JEAN_recv_slave(data, sizeof(data), 1, 0);
+//	ret = init_CMD_CHAN();
+//	if(ret < 0)
+//		return ret;
+//
+//	int i = 0;
+//	while(i < 10000)
+//	{
+////		len = JEAN_recv_slave(data, sizeof(data), 1, 0);
+////		if(len > 0)
+////			printf("recv: %s %d\n", data, len);
+//
+//		len = recv_cmd(rcv, 10);
 //		if(len > 0)
-//			printf("recv: %s %d\n", data, len);
-
-		len = recv_cmd(rcv, 10);
-		if(len > 0)
-			printf("cmd recv!!!!!! %s\n", rcv);
-
-//		JEAN_send_slave(data, sizeof(data), 1, 0);
-//		printRingStatus();
-		usleep(1000);
-		i++;
-	}
-
-	close_CMD_CHAN();
+//			printf("cmd recv!!!!!! %s\n", rcv);
+//
+////		JEAN_send_slave(data, sizeof(data), 1, 0);
+////		printRingStatus();
+//		usleep(1000);
+//		i++;
+//	}
+//
+//	close_CMD_CHAN();
 	JEAN_close_slave();
 	return 0;
 }

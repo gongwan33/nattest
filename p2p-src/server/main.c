@@ -17,6 +17,7 @@
 #include <errno.h>
 
 #define MAX_RECV_BUF  1024
+#define RECV_LEN  100
 #define TURN_DATA_SIZE 1024*1024*10
 #define MAX_TRY 10
 #define PORT1 61000
@@ -42,6 +43,7 @@ static struct sockaddr_in sin, recv_sin;
 static struct sockaddr_in turn_recv_sin;	
 static int sin_len, recv_sin_len;
 static char *recv_str;
+static unsigned int recv_strP;
 static int port = PORT1;
 static char Uname[10];
 static char Passwd[10];
@@ -151,7 +153,8 @@ int Send_S_IP(char * name){
 	struct node_net * tmp_node;
 	int i;
 	tmp_node = find_item(name);
-	if(tmp_node == NULL) return -1;
+	if(tmp_node == NULL) 
+		return -1;
 
 	RESP[0] = S_IP;
 	memcpy(RESP + 1, tmp_node->recv_sin_s, sizeof(struct sockaddr_in));
@@ -160,13 +163,37 @@ int Send_S_IP(char * name){
 	for(i = 0; i < MAX_TRY; i++){
 		sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)tmp_node->recv_sin_m, recv_sin_len);
 		printf("Send slave ip to master!%s\n", inet_ntoa(tmp_node->recv_sin_s->sin_addr));
-		recvfrom(sfd, recv_str, MAX_RECV_BUF, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-		if(recv_str[0] == GET_REQ && recv_str[1] == 0x08){
-			Send_CMD(GET_REQ, 0x09);
-		   	break;
+
+		if(recv_strP + RECV_LEN > MAX_RECV_BUF)
+		{
+			printf("recv buffer over flow\n");
+			recv_strP = 0;
+		}
+
+		int recvLen = 0;
+		int scanP = 0;
+		recvLen = recvfrom(sfd, recv_str + recv_strP, RECV_LEN, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+		if(recvLen <= 0)
+			continue;
+
+		while(recvLen - scanP >= sizeof(struct p2p_head))
+		{
+			if(recv_str[scanP + recv_strP == 'G'] && recv_str[scanP + recv_strP + 1] == 'R' && recv_str[scanP + recv_strP + 2] == 'Q')
+			{
+				struct p2p_head head;
+				memcpy(&head, recv_str + scanP + recv_strP, sizeof(struct p2p_head));
+
+				if(head.data[0] == 0x08){
+					set_rec_timeout(0, 0);	
+					return 0;
+				}
+			}
+			else
+				scanP++;
 		}
 	}
 	set_rec_timeout(0, 0);	
+	return -1;
 }
 
 int Send_M_IP(char * name){
@@ -621,6 +648,8 @@ int main(){
 	int length = 0;
 	char priority;
 	unsigned int recvLen = 0;
+	int scanP = 0;
+	struct p2p_head head;
 
 	init_list();
 
@@ -636,346 +665,487 @@ int main(){
 
 	printf("------------------- Welcome to JEAN P2P SYSTEM ---------------------\n");
 
+	set_rec_timeout(0, 0);//(usec, sec)
 	while(1){	
-		set_rec_timeout(0, 0);//(usec, sec)
-		memset(recv_str, 0, 50);
-		recvLen = recvfrom(sfd, recv_str, MAX_RECV_BUF, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-		Get_W = recv_str[0];
-//		printf("OPCODE = %d\n", Get_W);
+		recvLen = 0;
+		if(recv_strP > MAX_RECV_BUF - RECV_LEN)
+		{
+			printf("recv buffer overflow!!\n");
+			recv_strP = 0;
+		}
 
-		switch(Get_W){
-			case V_UAP:
-				memset(Uname, 0, 10);
-				Get_W = recv_str[0];
-				memcpy(Uname, recv_str + 1, 10);
-				memcpy(Passwd, recv_str + 12, 10);
-				memcpy(&tmp_sin, recv_str + 34, sizeof(struct sockaddr_in));
+		recvLen = recvfrom(sfd, recv_str + recv_strP, RECV_LEN, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
 
-				//printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
-				if(Uname == NULL){
-					printf("Error:User name is NULL!!");
+		if(recvLen <= 0)
+		{
+			continue;
+		}
+
+		recv_strP += recvLen;
+
+		while(scanP + sizeof(struct p2p_head) <= recv_strP)
+		{
+			if(recv_str[scanP] == 'V' && recv_str[scanP + 1] == 'U' && recv_str[scanP + 2] == 'P')
+			{
+				memcpy(&head, recv_str + scanP, sizeof(struct p2p_head));
+
+				Get_W = V_UAP;
+
+				scanP = scanP + sizeof(struct load_head);
+			}
+			else if(recv_str[scanP] == 'G' && recv_str[scanP + 1] == 'R' && recv_str[scanP + 2] == 'Q')
+			{
+				memcpy(&head, recv_str + scanP, sizeof(struct p2p_head));
+
+				Get_W = GET_REQ;
+
+				scanP = scanP + sizeof(struct load_head);
+			}
+			else if(recv_str[scanP] == 'S' && recv_str[scanP + 1] == 'U' && recv_str[scanP + 2] == 'P')
+			{
+				memcpy(&head, recv_str + scanP, sizeof(struct p2p_head));
+
+				Get_W = V_UAP_S;
+
+				scanP = scanP + sizeof(struct load_head);
+			}
+			else if(recv_str[scanP] == 'M' && recv_str[scanP + 1] == 'I' && recv_str[scanP + 2] == 'P')
+			{
+				memcpy(&head, recv_str + scanP, sizeof(struct p2p_head));
+
+				Get_W = REQ_M_IP;
+
+				scanP = scanP + sizeof(struct load_head);
+			}
+			else if(recv_str[scanP] == 'P' && recv_str[scanP + 1] == 'O' && recv_str[scanP + 2] == 'L')
+			{
+				memcpy(&head, recv_str + scanP, sizeof(struct p2p_head));
+
+				Get_W = POL_SENT;
+
+				scanP = scanP + sizeof(struct load_head);
+			}
+			else
+			{
+				scanP++;
+				continue;
+			}
+printf("Get_W %d\n", Get_W);
+			switch(Get_W){
+				case V_UAP:
+					memset(Uname, 0, 10);
+					memcpy(Uname, head.data, 10);
+					memcpy(Passwd, head.data + 10, 10);
+					memcpy(&tmp_sin, head.data + 20, sizeof(struct sockaddr_in));
+
+					//printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
+					if(Uname == NULL){
+						printf("Error:User name is NULL!!");
+						break;
+					}
+
+					printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
+					printf("Master local IP is %s\n", inet_ntoa(tmp_sin.sin_addr));
+					printf("Verify result: Uname = %d Passwd = %d\n", strcmp(UNAME, Uname), strcmp(PASSWD, Passwd));
+
+					if((strcmp(UNAME, Uname) != 0) || (strcmp(PASSWD, Passwd) != 0)){
+						printf("Username or password error!!\n");
+						Send_CMD(V_RESP, 0x2);
+						printf("Send response.\n");
+					}
+					else{
+						printf("Username and password verifying passed!!\n");
+
+						int Insert_Success = 0;
+						if(Find_Peer(Uname) == 0){
+							if(Peers_Sheet_Index < PEER_SHEET_LEN){
+								ret = Peer_Set(Uname, Passwd, &recv_sin, &tmp_sin);
+								printf("rec: %s local: %s\n", inet_ntoa(recv_sin.sin_addr), inet_ntoa(tmp_sin.sin_addr));
+								if(ret < 0){
+									printf("Set peer failed!\n");
+									return ret;
+								}
+
+								printListIp();
+								Peers_Sheet_Index++;
+								Insert_Success = 1;
+								printf("Registor success!! Now index at %d\n", Peers_Sheet_Index);
+							}
+							else{
+								Insert_Success = 0;
+								printf("Registor error!! Now index at %d\n", Peers_Sheet_Index);
+							}
+						}
+
+						if(!Insert_Success)
+							Send_CMD(V_RESP, 0x3);
+						else
+							Send_CMD(V_RESP, 0x1);
+						printf("Send response.\n");
+					}
 					break;
-				}
 
-				printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
-				printf("Master local IP is %s\n", inet_ntoa(tmp_sin.sin_addr));
-				printf("Verify result: Uname = %d Passwd = %d\n", strcmp(UNAME, Uname), strcmp(PASSWD, Passwd));
+				case V_UAP_S:
+					memset(Uname, 0, 10);
+					memcpy(Uname, head.data, 10);
+					memcpy(Passwd, head.data + 10, 10);
+					memcpy(&tmp_sin, head.data + 20, sizeof(struct sockaddr_in));
 
-				if((strcmp(UNAME, Uname) != 0) || (strcmp(PASSWD, Passwd) != 0)){
-					printf("Username or password error!!\n");
-					Send_CMD(V_RESP, 0x2);
-					printf("Send response.\n");
-				}
-				else{
-					printf("Username and password verifying passed!!\n");
+					//printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
+					if(Uname == NULL){
+						printf("Error:User name is NULL!!");
+						break;
+					}
 
-					int Insert_Success = 0;
-					if(Find_Peer(Uname) == 0){
-						if(Peers_Sheet_Index < PEER_SHEET_LEN){
-							ret = Peer_Set(Uname, Passwd, &recv_sin, &tmp_sin);
+					printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
+					printf("Slave local IP is %s\n", inet_ntoa(tmp_sin.sin_addr));
+					printf("Verify result: Uname = %d Passwd = %d\n", strcmp(UNAME, Uname), strcmp(PASSWD, Passwd));
+
+					if((strcmp(UNAME, Uname) != 0) || (strcmp(PASSWD, Passwd) != 0)){
+						printf("Username or password error!!\n");
+						Send_CMD(GET_REQ, 0x5);
+						printf("Send response.\n");
+					}
+					else{
+						printf("Username and password verifying passed!!\n");
+
+						int Find_Success = 0;
+						if(Find_Peer(Uname) != 0){
+							Find_Success = 1;
+							printf("Node find success!! Now index at %d\n", Peers_Sheet_Index);
+						}
+
+						if(Find_Success){
+							Send_CMD(GET_REQ, 0x4);
+							printf("Send response.\n");
 							printf("rec: %s local: %s\n", inet_ntoa(recv_sin.sin_addr), inet_ntoa(tmp_sin.sin_addr));
+							ret = Peer_Set_Slave(Uname, &recv_sin, &tmp_sin);
 							if(ret < 0){
-								printf("Set peer failed!\n");
-								return ret;
+								printf("Login sheet is broken!\n");
+								return LOGIN_SHEET_BROKEN;
 							}
 
 							printListIp();
-							Peers_Sheet_Index++;
-							Insert_Success = 1;
-							printf("Registor success!! Now index at %d\n", Peers_Sheet_Index);
+							Send_S_IP(Uname);
 						}
 						else{
-							Insert_Success = 0;
-							printf("Registor error!! Now index at %d\n", Peers_Sheet_Index);
+							Send_CMD(GET_REQ, 0x6);
+							printf("Send response.\n");
 						}
 					}
-
-					if(!Insert_Success)
-						Send_CMD(V_RESP, 0x3);
-					else
-						Send_CMD(V_RESP, 0x1);
-					printf("Send response.\n");
-				}
-				break;
-
-			case V_UAP_S:
-				memset(Uname, 0, 10);
-				Get_W = recv_str[0];
-				memcpy(Uname, recv_str + 1, 10);
-				memcpy(Passwd, recv_str + 12, 10);
-				memcpy(&tmp_sin, recv_str + 34, sizeof(struct sockaddr_in));
-
-				//printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
-				if(Uname == NULL){
-					printf("Error:User name is NULL!!");
 					break;
-				}
 
-				printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
-				printf("Slave local IP is %s\n", inet_ntoa(tmp_sin.sin_addr));
-				printf("Verify result: Uname = %d Passwd = %d\n", strcmp(UNAME, Uname), strcmp(PASSWD, Passwd));
+				case REQ_M_IP:
+					memset(Uname, 0, 10);
+					memcpy(Uname, head.data, 10);
+					//printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
+					if(Uname == NULL){
+						printf("Error:User name is NULL!!");
+						break;
+					}
 
-				if((strcmp(UNAME, Uname) != 0) || (strcmp(PASSWD, Passwd) != 0)){
-					printf("Username or password error!!\n");
-					Send_CMD(GET_REQ, 0x5);
-					printf("Send response.\n");
-				}
-				else{
-					printf("Username and password verifying passed!!\n");
+					printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
 
 					int Find_Success = 0;
 					if(Find_Peer(Uname) != 0){
-							Find_Success = 1;
-							printf("Node find success!! Now index at %d\n", Peers_Sheet_Index);
+						Find_Success = 1;
+						printf("Node find success!! Now index at %d\n", Peers_Sheet_Index);
 					}
 
 					if(Find_Success){
-						Send_CMD(GET_REQ, 0x4);
-						printf("Send response.\n");
-						printf("rec: %s local: %s\n", inet_ntoa(recv_sin.sin_addr), inet_ntoa(tmp_sin.sin_addr));
-						ret = Peer_Set_Slave(Uname, &recv_sin, &tmp_sin);
-						if(ret < 0){
-							printf("Login sheet is broken!\n");
-							return LOGIN_SHEET_BROKEN;
-						}
-							
-						printListIp();
-						Send_S_IP(Uname);
+						Send_M_IP(Uname);
 					}
-					else{
-						Send_CMD(GET_REQ, 0x6);
-						printf("Send response.\n");
-					}
-				}
-				break;
-				
-			case REQ_M_IP:
-				memset(Uname, 0, 10);
-				sscanf(recv_str, "%c %s", &Get_W, Uname);
-				//printf("Recieve from %s [%d]:%d %s %s\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname, Passwd);
-				if(Uname == NULL){
-					printf("Error:User name is NULL!!");
 					break;
-				}
 
-				printf("Recieve from %s [%d]:%d %s ***\n", inet_ntoa(recv_sin.sin_addr), ntohs(recv_sin.sin_port), Get_W, Uname);
+				case KEEP_CON:
+					Send_CMD(GET_REQ, 0x03);
+					printf("KEEP_CON has already responsed.\n");
+					break;
 
-				int Find_Success = 0;
-				if(Find_Peer(Uname) != 0){
-					Find_Success = 1;
-					printf("Node find success!! Now index at %d\n", Peers_Sheet_Index);
-				}
-
-				if(Find_Success){
-					Send_M_IP(Uname);
-				}
-				break;
-
-			case KEEP_CON:
-				Send_CMD(GET_REQ, 0x03);
-				printf("KEEP_CON has already responsed.\n");
-				break;
-
-			case GET_REQ:
-				if(recv_str[1] == 0x08){
-					Send_CMD(GET_REQ, 0x9);
-					printf("IP confirm pack has already responsed.\n");
-				}
-				break;
-
-			case MASTER_QUIT:
-				turnSign = 0;
-				cmdSign = 0;
-		        connectSign = 0;
-				memset(Uname, 0, 10);
-				sscanf(recv_str, "%c %s", &Get_W, Uname);
-
-				if(0 == del_item(Uname))
-				{
-					Send_CMD(GET_REQ, 0x1);
-					printf("Node Deleted.\n");
-				}
-				else
-				{
-					Send_CMD(GET_REQ, 0x1);
-					printf("Node Deleted.\n");
-				}
-				break;
-
-			case POL_SENT:
-				memset(Uname, 0, 10);
-				memcpy(Uname, recv_str + 1, 10);
-
-				Send_CMD(GET_REQ, 0xb);
-				printf("Get POL_SENT.\n");
-
-				clean_rec_buff();
-				int i = 0;
-				int master_mode = 1;
-				int cmd_sent = 0;
-				struct node_net * tmpn;
-
-				tmpn = find_item(Uname);
-
-				set_rec_timeout(0, 10);//(usec, sec)
-				for(i = 0; i < MAX_TRY; i++){
-					memset(recv_str, 0, 50);
-					if(!cmd_sent){
-						ret = Send_M_POL_REQ(Uname);
-						if(ret < 0) printf(" Username connect failed.\n");
-						printf("Master connecting slave...\n");
+				case GET_REQ:
+					if(head.data[0] == 0x08){
+						Send_CMD(GET_REQ, 0x9);
+						printf("IP confirm pack has already responsed.\n");
 					}
-					recvfrom(sfd, recv_str, MAX_RECV_BUF, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-					if(recv_str[0] == GET_REQ && recv_str[1] == 0x0e){
-						printf("Pole ok! Connection established.\n");
-						tmpn->pole_res = 1;
-						break;
-					}
-					else if(recv_str[0] == GET_REQ && recv_str[1] == 0x0f){
-						printf("Pole failed! Change to slave mode.\n");
-						master_mode = 0;
-						tmpn->pole_res = 0;
-						break;
-					}
-					else if(recv_str[0] == GET_REQ && recv_str[1] == 0x12)
-						cmd_sent = 1;
-				}
+					break;
 
-				if(i >= MAX_TRY){
-						printf("Pole failed! Change to slave mode.\n");
-						master_mode = 0;
-						tmpn->pole_res = 0;
-				}
-				
-				clean_rec_buff();
-				cmd_sent = 0;
-				if(master_mode == 0){
+				case MASTER_QUIT:
+					turnSign = 0;
+					cmdSign = 0;
+					connectSign = 0;
+					memset(Uname, 0, 10);
+					sscanf(recv_str, "%c %s", &Get_W, Uname);
+
+					if(0 == del_item(Uname))
+					{
+						Send_CMD(GET_REQ, 0x1);
+						printf("Node Deleted.\n");
+					}
+					else
+					{
+						Send_CMD(GET_REQ, 0x1);
+						printf("Node Deleted.\n");
+					}
+					break;
+
+				case POL_SENT:
+					memset(Uname, 0, 10);
+					memcpy(Uname, head.data, 10);
+
+					Send_CMD(GET_REQ, 0xb);
+					printf("Get POL_SENT.\n");
+
+					clean_rec_buff();
+					int i = 0;
+					int master_mode = 1;
+					int cmd_sent = 0;
+					struct node_net * tmpn;
+
+					tmpn = find_item(Uname);
+
 					set_rec_timeout(0, 10);//(usec, sec)
-					for(i = 0; i < MAX_TRY; i++){
-						memset(recv_str, 0, 50);
+					for(i = 0; i < MAX_TRY; i++)
+					{
 						if(!cmd_sent){
-							ret = Send_CMD_TO_SLAVE(S_POL_REQ ,Uname);
+							ret = Send_M_POL_REQ(Uname);
 							if(ret < 0) printf(" Username connect failed.\n");
-							printf("Slave connecting master...\n");
+							printf("Master connecting slave...\n");
 						}
 
-						recvfrom(sfd, recv_str, MAX_RECV_BUF, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-						if(recv_str[0] == GET_REQ && recv_str[1] == 0x10){
-							printf("Pole ok! Connection established.\n");
-							tmpn->pole_res = 1;
-							break;
+						if(recv_strP + RECV_LEN > MAX_RECV_BUF)
+						{
+							printf("recv buffer over flow\n");
+							recv_strP = 0;
 						}
-						else if(recv_str[0] == GET_REQ && recv_str[1] == 0x11){
-							printf("Pole failed!\n");
-							tmpn->pole_res = 0;
-							break;
+
+						int recvLen = 0;
+						int scanP = 0;
+						int okSign = 0;
+						recvLen = recvfrom(sfd, recv_str + recv_strP, RECV_LEN, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+						if(recvLen <= 0)
+							continue;
+
+						while(recvLen - scanP >= sizeof(struct p2p_head))
+						{
+							if(recv_str[scanP + recv_strP == 'G'] && recv_str[scanP + recv_strP + 1] == 'R' && recv_str[scanP + recv_strP + 2] == 'Q')
+							{
+								struct p2p_head head;
+								memcpy(&head, recv_str + scanP + recv_strP, sizeof(struct p2p_head));
+
+								if(head.data[0] == 0x0e){
+									printf("Pole ok! Connection established.\n");
+									tmpn->pole_res = 1;
+									okSign = 1;
+									break;
+								}
+								else if(head.data[0] == 0x0f){
+									printf("Pole failed! Change to slave mode.\n");
+									master_mode = 0;
+									tmpn->pole_res = 0;
+									okSign = 1;
+									break;
+								}
+								else if(head.data[0] == 0x12)
+									cmd_sent = 1;
+							}
+							else
+								scanP++;
 						}
-						else if(recv_str[0] == GET_REQ && recv_str[1] == 0x13)
-							cmd_sent = 1;
+						if(okSign == 1)
+							break;
 					}
-				}
 
-				if(i >= MAX_TRY){
+					if(i >= MAX_TRY){
+						printf("Pole failed! Change to slave mode.\n");
+						master_mode = 0;
+						tmpn->pole_res = 0;
+					}
+
+					clean_rec_buff();
+					cmd_sent = 0;
+					if(master_mode == 0){
+						set_rec_timeout(0, 10);//(usec, sec)
+						for(i = 0; i < MAX_TRY; i++){
+							if(!cmd_sent){
+								ret = Send_CMD_TO_SLAVE(S_POL_REQ ,Uname);
+								if(ret < 0) printf(" Username connect failed.\n");
+								printf("Slave connecting master...\n");
+							}
+
+							if(recv_strP + RECV_LEN > MAX_RECV_BUF)
+							{
+								printf("recv buffer over flow\n");
+								recv_strP = 0;
+							}
+
+							int recvLen = 0;
+							int scanP = 0;
+							int okSign = 0;
+							recvLen = recvfrom(sfd, recv_str + recv_strP, RECV_LEN, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+							if(recvLen <= 0)
+								continue;
+
+							while(recvLen - scanP >= sizeof(struct p2p_head))
+							{
+								if(recv_str[scanP + recv_strP == 'G'] && recv_str[scanP + recv_strP + 1] == 'R' && recv_str[scanP + recv_strP + 2] == 'Q')
+								{
+									struct p2p_head head;
+									memcpy(&head, recv_str + scanP + recv_strP, sizeof(struct p2p_head));
+
+									if(head.data[0] == 0x10){
+										printf("Pole ok! Connection established.\n");
+										tmpn->pole_res = 1;
+										break;
+									}
+									else if(head.data[0] == 0x11){
+										printf("Pole failed!\n");
+										tmpn->pole_res = 0;
+										break;
+									}
+									else if(head.data[0] == 0x13)
+										cmd_sent = 1;
+								}
+								else
+									scanP++;
+							}
+							if(okSign == 1)
+								break;
+						}
+					}
+
+					if(i >= MAX_TRY){
 						printf("Pole failed!\n");
 						master_mode = 0;
 						tmpn->pole_res = 0;
-				}
-
-				int res_count = 0;
-				set_rec_timeout(0, 1);//(usec, sec)
-				for(i = 0; i < MAX_TRY; i++){
-					if(tmpn->pole_res == 0){
-						Send_CMD_TO_IP(CON_ESTAB, 2, tmpn->recv_sin_m);
-						Send_CMD_TO_IP(CON_ESTAB, 2, tmpn->recv_sin_s);
-					}
-					else{
-						Send_CMD_TO_IP(CON_ESTAB, 1, tmpn->recv_sin_m);
-						Send_CMD_TO_IP(CON_ESTAB, 1, tmpn->recv_sin_s);
-					}
-					printf("Send connection result(%d) to master and slave.\n", tmpn->pole_res);
-
-					recvfrom(sfd, recv_str, MAX_RECV_BUF, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
-					if(recv_str[0] == GET_REQ && recv_str[1] == 0x14){
-						break;
 					}
 
-				}
+					int res_count = 0;
+					set_rec_timeout(0, 1);//(usec, sec)
+					for(i = 0; i < MAX_TRY; i++){
+						if(tmpn->pole_res == 0){
+							Send_CMD_TO_IP(CON_ESTAB, 2, tmpn->recv_sin_m);
+							Send_CMD_TO_IP(CON_ESTAB, 2, tmpn->recv_sin_s);
+						}
+						else{
+							Send_CMD_TO_IP(CON_ESTAB, 1, tmpn->recv_sin_m);
+							Send_CMD_TO_IP(CON_ESTAB, 1, tmpn->recv_sin_s);
+						}
+						printf("Send connection result(%d) to master and slave.\n", tmpn->pole_res);
 
-				if(i >= MAX_TRY){
-					printf("ERRO: Some node offline!\n");
-				}
+						if(recv_strP + RECV_LEN > MAX_RECV_BUF)
+						{
+							printf("recv buffer over flow\n");
+							recv_strP = 0;
+						}
 
-				break;
-				
-			case TURN_REQ:
-				Send_CMD(GET_REQ, 0x1);
-				turnSign = 1;
-				printf("Entering turn thread! runSign %d\n", turnThreadRunning);
-				recvProcessBufP = 0;
-				if(turnThreadRunning == 0)
-				{
-					turnThreadRunning = 1;
-					pthread_create(&turn_id, NULL, turnThread, NULL);
-				}
-				break;
+						int recvLen = 0;
+						int scanP = 0;
+						int okSign = 0;
+						recvLen = recvfrom(sfd, recv_str + recv_strP, RECV_LEN, 0, (struct sockaddr *)&recv_sin, &recv_sin_len);
+						if(recvLen <= 0)
+							continue;
 
-			case CMD_CHAN:
-				cmdSign = 1;
-				memset(buf1, 0 ,sizeof(buf1));
-				memset(buf2, 0 ,sizeof(buf2));
-				if(recv_str[23] == 'M')
-				{
-					printf("Entering cmd thread!\n");
-					while(peerInSign == 1)
+						while(recvLen - scanP >= sizeof(struct p2p_head))
+						{
+							if(recv_str[scanP + recv_strP == 'G'] && recv_str[scanP + recv_strP + 1] == 'R' && recv_str[scanP + recv_strP + 2] == 'Q')
+							{
+								struct p2p_head head;
+								memcpy(&head, recv_str + scanP + recv_strP, sizeof(struct p2p_head));
+
+								if(head.data[0] == 0x14){
+									okSign = 1;
+									break;
+								}
+							}
+							else
+								scanP++;
+						}
+						if(okSign == 1)
+							break;
+
+					}
+
+					if(i >= MAX_TRY){
+						printf("ERRO: Some node offline!\n");
+					}
+
+					break;
+
+				case TURN_REQ:
+					Send_CMD(GET_REQ, 0x1);
+					turnSign = 1;
+					printf("Entering turn thread! runSign %d\n", turnThreadRunning);
+					recvProcessBufP = 0;
+					if(turnThreadRunning == 0)
 					{
-						cmdSign = 0;
-						connectSign = 0;
-						usleep(100);
+						turnThreadRunning = 1;
+						pthread_create(&turn_id, NULL, turnThread, NULL);
 					}
+					break;
 
-					if(cmdThreadRunning == 0)
+				case CMD_CHAN:
+					cmdSign = 1;
+					memset(buf1, 0 ,sizeof(buf1));
+					memset(buf2, 0 ,sizeof(buf2));
+					if(recv_str[23] == 'M')
 					{
-						cmdThreadRunning = 1;
-						pthread_create(&cmd_id, NULL, cmdThread, NULL);
-					}
-				}
-				else
-				{
-					if(cmdThreadRunning == 0)
-						break;
-				}
-				Send_CMD(GET_REQ, 0x1);
-				break;
+						printf("Entering cmd thread!\n");
+						while(peerInSign == 1)
+						{
+							cmdSign = 0;
+							connectSign = 0;
+							usleep(100);
+						}
 
-			case CONTROL_CHAN:
-				controlSign = 1;
-				memset(controlBuf1, 0 ,sizeof(controlBuf1));
-				memset(controlBuf2, 0 ,sizeof(controlBuf2));
-				if(recv_str[23] == 'M')
-				{
-					printf("Entering control thread!\n");
-					while(controlPeerInSign == 1)
-					{
-						controlSign = 0;
-						controlConnectSign = 0;
-						usleep(100);
+						if(cmdThreadRunning == 0)
+						{
+							cmdThreadRunning = 1;
+							pthread_create(&cmd_id, NULL, cmdThread, NULL);
+						}
 					}
+					else
+					{
+						if(cmdThreadRunning == 0)
+							break;
+					}
+					Send_CMD(GET_REQ, 0x1);
+					break;
 
-					if(controlThreadRunning == 0)
+				case CONTROL_CHAN:
+					controlSign = 1;
+					memset(controlBuf1, 0 ,sizeof(controlBuf1));
+					memset(controlBuf2, 0 ,sizeof(controlBuf2));
+					if(recv_str[23] == 'M')
 					{
-						controlThreadRunning = 1;
-						pthread_create(&cmd_id, NULL, controlThread, NULL);
+						printf("Entering control thread!\n");
+						while(controlPeerInSign == 1)
+						{
+							controlSign = 0;
+							controlConnectSign = 0;
+							usleep(100);
+						}
+
+						if(controlThreadRunning == 0)
+						{
+							controlThreadRunning = 1;
+							pthread_create(&cmd_id, NULL, controlThread, NULL);
+						}
 					}
-				}
-				else
-				{
-					if(controlThreadRunning == 0)
-						break;
-				}
-				Send_CMD(GET_REQ, 0x1);
-				break;
+					else
+					{
+						if(controlThreadRunning == 0)
+							break;
+					}
+					Send_CMD(GET_REQ, 0x1);
+					break;
+
+			}
 
 		}
+
+		scanP = 0;
+		recv_strP = 0;
+
 	}
 
 	connectSign = 0;
