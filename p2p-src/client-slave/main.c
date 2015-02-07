@@ -176,7 +176,7 @@ int Send_TURN(){
 	struct p2p_head head;
 	memcpy(&head.logo, "TRN", 3);
 
-	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	sendto(sockfd, &head, sizeof(struct p2p_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	return 0;
 }
 
