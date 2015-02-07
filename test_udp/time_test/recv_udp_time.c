@@ -49,7 +49,8 @@ void main()
 	while(1)
 	{
 		len = recvfrom(sockfd, data, UNIT_SIZE, 0, (struct sockaddr *)&host_sin, &slen);
-		total_num += len;
+		if(len > 0)
+			total_num += len;
 #if TEST_EVERY
 		usleep(TEST_EVERY);
 #endif
