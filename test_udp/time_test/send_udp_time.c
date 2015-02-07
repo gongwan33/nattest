@@ -6,8 +6,8 @@
 #include <string.h>
 #include <errno.h>
 
-#define SIP "192.168.1.149"
-#define TEST_EVERY 10 //us
+#define SIP "192.168.1.109"
+#define TEST_EVERY 100 //us
 #define TEST_TIMES 2000
 #define UNIT_SIZE 100
 
@@ -36,6 +36,7 @@ int local_net_init(int port){
 void main()
 {
 	int i = 0;
+	int len = 0;
 	char data[UNIT_SIZE];
 	local_net_init(1000);
 	memset(&host_sin, 0, sizeof(host_sin));
@@ -45,7 +46,9 @@ void main()
 
 	while(i < TEST_TIMES)
 	{
-		sendto(sockfd, data, UNIT_SIZE, 0, (struct sockaddr *)&host_sin, sizeof(host_sin));
+
+		len = sendto(sockfd, data, UNIT_SIZE, 0, (struct sockaddr *)&host_sin, sizeof(host_sin));
+		printf("%d send len = %d\n", i, len);
 #if TEST_EVERY
 		usleep(TEST_EVERY);
 #endif

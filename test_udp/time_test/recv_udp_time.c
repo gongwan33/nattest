@@ -6,7 +6,7 @@
 #include <string.h>
 #include <errno.h>
 
-#define SIP "192.168.1.149"
+#define SIP "192.168.1.109"
 #define UNIT_SIZE 100
 #define TEST_EVERY 100
 
