@@ -8,7 +8,7 @@
 
 #define SIP "192.168.1.109"
 #define UNIT_SIZE 100
-#define TEST_EVERY 100
+#define TEST_EVERY 10
 
 static struct sockaddr_in local_addr, host_sin;
 int sockfd;

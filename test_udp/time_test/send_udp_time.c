@@ -7,7 +7,7 @@
 #include <errno.h>
 
 #define SIP "192.168.1.149"
-#define TEST_EVERY 100 //us
+#define TEST_EVERY 2000 //us
 #define TEST_TIMES 2000
 #define UNIT_SIZE 100
 
