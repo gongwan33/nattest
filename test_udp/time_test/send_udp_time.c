@@ -6,10 +6,10 @@
 #include <string.h>
 #include <errno.h>
 
-#define SIP "192.168.40.131"
-#define TEST_EVERY 1 //us
-#define TEST_TIMES 20000
-#define UNIT_SIZE 1000
+#define SIP "192.168.1.149"
+#define TEST_EVERY 10 //us
+#define TEST_TIMES 2000
+#define UNIT_SIZE 100
 
 static struct sockaddr_in local_addr, host_sin;
 int sockfd;

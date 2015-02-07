@@ -6,9 +6,9 @@
 #include <string.h>
 #include <errno.h>
 
-#define SIP "192.168.40.131"
-#define UNIT_SIZE 1000
-#define TEST_EVERY 1
+#define SIP "192.168.1.149"
+#define UNIT_SIZE 100
+#define TEST_EVERY 100
 
 static struct sockaddr_in local_addr, host_sin;
 int sockfd;
