@@ -36,7 +36,7 @@ void main()
 {
 	char data[UNIT_SIZE];
 	int len = 0;
-	socklen_t slen;
+	socklen_t slen = sizeof(host_sin);
 	int total_num = 0;
 
 
