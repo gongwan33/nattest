@@ -173,14 +173,8 @@ int set_rec_timeout(int usec, int sec){
 }
 
 int Send_TURN(){
-	char Sen_W;
-	Sen_W = TURN_REQ;
-	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
-
-	ip_info[0] = Sen_W;
-	memcpy(ip_info + 1, USERNAME, 10);
-	memcpy(ip_info + 12, PASSWD, 10);
-	memcpy(ip_info + 34, &host_sin, sizeof(struct sockaddr_in));
+	struct p2p_head head;
+	memcpy(&head.logo, "TRN", 3);
 
 	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	return 0;
@@ -237,6 +231,8 @@ void Send_CMD(char Ctls, char Res){
 	struct p2p_head head;
 	if(Ctls == GET_REQ)
 		memcpy(head.logo, "GRQ", 3);
+	else if(Ctls == KEEP_CON)
+		memcpy(head.logo, "KEP", 3);
 	head.data[0] = Res;
 	sendto(sockfd, &head, sizeof(struct p2p_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
@@ -952,9 +948,9 @@ int main(){
 	if(ret < 0)
 		return ret;
 
-//	ret = init_CMD_CHAN();
-//	if(ret < 0)
-//		return ret;
+	ret = init_CMD_CHAN();
+	if(ret < 0)
+		return ret;
 //
 //	int i = 0;
 //	while(i < 10000)
@@ -973,7 +969,7 @@ int main(){
 //		i++;
 //	}
 //
-//	close_CMD_CHAN();
-//	JEAN_close_slave();
+	close_CMD_CHAN();
+	JEAN_close_slave();
 	return 0;
 }

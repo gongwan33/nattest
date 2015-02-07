@@ -186,30 +186,20 @@ int Send_VUAP(){
 }
 
 int Send_CLOSE(){
-	char Sen_W;
-	Sen_W = MASTER_QUIT;
-	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
+	struct p2p_head head;
+	memcpy(&head.logo, "QIT", 3);
 
-	ip_info[0] = Sen_W;
-	memcpy(ip_info + 1, USERNAME, 10);
-	memcpy(ip_info + 12, PASSWD, 10);
-	memcpy(ip_info + 34, &host_sin, sizeof(struct sockaddr_in));
+	memcpy(head.data, USERNAME, 10);
 
-	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	sendto(sockfd, &head, sizeof(struct p2p_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	return 0;
 }
 
 int Send_TURN(){
-	char Sen_W;
-	Sen_W = TURN_REQ;
-	if(strlen(USERNAME) > 10 || strlen(PASSWD) > 10) return -1;
+	struct p2p_head head;
+	memcpy(&head.logo, "TRN", 3);
 
-	ip_info[0] = Sen_W;
-	memcpy(ip_info + 1, USERNAME, 10);
-	memcpy(ip_info + 12, PASSWD, 10);
-	memcpy(ip_info + 34, &host_sin, sizeof(struct sockaddr_in));
-
-	sendto(sockfd, ip_info, sizeof(ip_info), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
+	sendto(sockfd, &head, sizeof(struct p2p_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 	return 0;
 }
 
@@ -231,6 +221,8 @@ void Send_CMD(char Ctls, char Res){
 	struct p2p_head head;
 	if(Ctls == GET_REQ)
 		memcpy(head.logo, "GRQ", 3);
+	else if(Ctls == KEEP_CON)
+		memcpy(head.logo, "KEP", 3);
 	head.data[0] = Res;
 	sendto(sockfd, &head, sizeof(struct p2p_head), 0, (struct sockaddr *)&servaddr1, sizeof(servaddr1));
 }
@@ -929,9 +921,9 @@ int main(){
 		return ret;
 	}
 
-//	ret = init_CMD_CHAN();
-//	if(ret < 0)
-//		return ret;
+	ret = init_CMD_CHAN();
+	if(ret < 0)
+		return ret;
 //
 //	int i = 0;
 //	while(i < 10000)
@@ -949,7 +941,7 @@ int main(){
 //		i++;
 //	}
 //
-//	close_CMD_CHAN();
-//	JEAN_close_master();
+	close_CMD_CHAN();
+	JEAN_close_master();
 	return 0;
 }

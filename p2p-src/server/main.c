@@ -735,7 +735,38 @@ int main(){
 
 				scanP = scanP + sizeof(struct p2p_head);
 			}
+			else if(recv_str[scanP] == 'Q' && recv_str[scanP + 1] == 'I' && recv_str[scanP + 2] == 'T')
+			{
+				memcpy(&head, recv_str + scanP, sizeof(struct p2p_head));
 
+				Get_W = MASTER_QUIT;
+
+				scanP = scanP + sizeof(struct p2p_head);
+			}
+			else if(recv_str[scanP] == 'K' && recv_str[scanP + 1] == 'E' && recv_str[scanP + 2] == 'P')
+			{
+				memcpy(&head, recv_str + scanP, sizeof(struct p2p_head));
+
+				Get_W = KEEP_CON;
+
+				scanP = scanP + sizeof(struct p2p_head);
+			}
+			else if(recv_str[scanP] == 'T' && recv_str[scanP + 1] == 'R' && recv_str[scanP + 2] == 'N')
+			{
+				memcpy(&head, recv_str + scanP, sizeof(struct p2p_head));
+
+				Get_W = TURN_REQ;
+
+				scanP = scanP + sizeof(struct p2p_head);
+			}
+			else if(recv_str[scanP] == 'C' && recv_str[scanP + 1] == 'T' && recv_str[scanP + 2] == 'L')
+			{
+				memcpy(&head, recv_str + scanP, sizeof(struct p2p_head));
+
+				Get_W = CONTROL_CHAN;
+
+				scanP = scanP + sizeof(struct p2p_head);
+			}
 			else
 			{
 				scanP++;
@@ -885,7 +916,7 @@ printf("Get_W %d\n", Get_W);
 					cmdSign = 0;
 					connectSign = 0;
 					memset(Uname, 0, 10);
-					sscanf(recv_str, "%c %s", &Get_W, Uname);
+					memcpy(head.data, Uname, 10);
 
 					if(0 == del_item(Uname))
 					{
@@ -1129,7 +1160,7 @@ printf("Get_W %d\n", Get_W);
 					controlSign = 1;
 					memset(controlBuf1, 0 ,sizeof(controlBuf1));
 					memset(controlBuf2, 0 ,sizeof(controlBuf2));
-					if(recv_str[23] == 'M')
+					if(head.data[0] == 'M')
 					{
 						printf("Entering control thread!\n");
 						while(controlPeerInSign == 1)
