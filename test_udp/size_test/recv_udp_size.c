@@ -5,10 +5,11 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <errno.h>
+#include "datSize.h"
 
-#define SIP "192.168.40.131"
-#define UNIT_SIZE 10000
-#define TEST_EVERY 1
+#define SIP "192.168.1.149"
+#define TEST_EVERY 100
+#define RECV_LEN 64*1024
 
 static struct sockaddr_in local_addr, host_sin;
 int sockfd;
@@ -16,7 +17,7 @@ int sockfd;
 int local_net_init(int port){
 	memset(&local_addr, 0, sizeof(local_addr));
 	local_addr.sin_family = AF_INET;
-	local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	local_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 	local_addr.sin_port = htons(port);
 
 	if((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
@@ -48,8 +49,9 @@ void main()
 
 	while(1)
 	{
-		len = recvfrom(sockfd, data, UNIT_SIZE, 0, (struct sockaddr *)&host_sin, &slen);
-		total_num += len;
+		len = recvfrom(sockfd, data, RECV_LEN, 0, (struct sockaddr *)&host_sin, &slen);
+		if(len > 0)
+			total_num += len;
 #if TEST_EVERY
 		usleep(TEST_EVERY);
 #endif

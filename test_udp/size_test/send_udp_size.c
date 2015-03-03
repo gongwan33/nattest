@@ -5,11 +5,11 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <errno.h>
+#include "datSize.h"
 
-#define SIP "192.168.40.131"
-#define TEST_EVERY 1000 //us
-#define TEST_TIMES 20000
-#define UNIT_SIZE 10000
+#define SIP "127.0.0.1"
+#define TEST_EVERY 210 //us
+#define TEST_TIMES 10000
 
 static struct sockaddr_in local_addr, host_sin;
 int sockfd;
