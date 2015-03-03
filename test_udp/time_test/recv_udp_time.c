@@ -9,6 +9,7 @@
 #define SIP "192.168.1.109"
 #define UNIT_SIZE 100
 #define TEST_EVERY 10
+#define RECV_LEN 64*1024
 
 static struct sockaddr_in local_addr, host_sin;
 int sockfd;
@@ -48,7 +49,7 @@ void main()
 
 	while(1)
 	{
-		len = recvfrom(sockfd, data, UNIT_SIZE, 0, (struct sockaddr *)&host_sin, &slen);
+		len = recvfrom(sockfd, data, RECV_LEN, 0, (struct sockaddr *)&host_sin, &slen);
 		if(len > 0)
 			total_num += len;
 #if TEST_EVERY
