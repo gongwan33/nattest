@@ -42,6 +42,9 @@
 #define LOGIN_SHEET_BROKEN		-55
 #define NO_CONNECTION           -56
 
+//-----------------------------NODE STATUS---------------------------------
+#define INIT_P 0x00
+#define M_GET_SLAVE_IP 0x01
 
 struct load_head {
 	char logo[4];

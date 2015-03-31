@@ -56,6 +56,7 @@ struct node_net{
 	struct sockaddr_in * local_sin_s;
 	int pole_res;
 	int sin_len;
+	char status;
     	
 	struct list_head list;
  };

@@ -253,6 +253,7 @@ int Peer_Set(char * name, char * passwd, struct sockaddr_in * r, struct sockaddr
 	strcpy(Peer_Login->Passwd, passwd);
 	memcpy(Peer_Login->recv_sin_m, r, sizeof(struct sockaddr_in));
 	memcpy(Peer_Login->local_sin_m, l, sizeof(struct sockaddr_in));
+	Peer_Login->status = INIT_P;
 	
 	add_item(Peer_Login);
 
@@ -651,6 +652,7 @@ int main(){
 	int recvLen = 0;
 	int scanP = 0;
 	struct p2p_head head;
+	struct node_net * tmpn;
 
 	init_list();
 
@@ -698,7 +700,7 @@ int main(){
 			else if(recv_str[scanP] == 'G' && recv_str[scanP + 1] == 'R' && recv_str[scanP + 2] == 'Q')
 			{
 				memcpy(&head, recv_str + scanP, sizeof(struct p2p_head));
-
+printf("get req!!!!!\n");
 				Get_W = GET_REQ;
 
 				scanP = scanP + sizeof(struct p2p_head);
@@ -907,6 +909,12 @@ printf("Get_W %d\n", Get_W);
 				case GET_REQ:
 					if(head.data[0] == 0x08){
 						Send_CMD(GET_REQ, 0x9);
+						struct node_net* tmpn = NULL;
+						tmpn = find_item_by_ip(&recv_sin);
+						if(tmpn != NULL)
+							tmpn->status = M_GET_SLAVE_IP;
+						else
+							printf("ERRO: NODE NOT FOUNT IN GET_REQ\n");
 						printf("IP confirm pack has already responsed.\n");
 					}
 					break;
@@ -931,6 +939,11 @@ printf("Get_W %d\n", Get_W);
 					break;
 
 				case POL_SENT:
+
+					tmpn = find_item(Uname);
+					if(tmpn->status != M_GET_SLAVE_IP)
+						break;
+
 					memset(Uname, 0, 10);
 					memcpy(Uname, head.data, 10);
 
@@ -941,9 +954,6 @@ printf("Get_W %d\n", Get_W);
 					int i = 0;
 					int master_mode = 1;
 					int cmd_sent = 0;
-					struct node_net * tmpn;
-
-					tmpn = find_item(Uname);
 
 					set_rec_timeout(0, 10);//(usec, sec)
 					for(i = 0; i < MAX_TRY; i++)
@@ -1038,11 +1048,13 @@ printf("Get_W %d\n", Get_W);
 									if(head.data[0] == 0x10){
 										printf("Pole ok! Connection established.\n");
 										tmpn->pole_res = 1;
+										okSign = 1;
 										break;
 									}
 									else if(head.data[0] == 0x11){
 										printf("Pole failed!\n");
 										tmpn->pole_res = 0;
+										okSign = 1;
 										break;
 									}
 									else if(head.data[0] == 0x13)
