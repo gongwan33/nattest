@@ -157,7 +157,10 @@ int Send_S_IP(char * name){
 		return -1;
 
 	RESP[0] = S_IP;
-	memcpy(RESP + 1, tmp_node->recv_sin_s, sizeof(struct sockaddr_in));
+	if(memcmp(&(tmp_node->recv_sin_m->sin_addr), &(tmp_node->recv_sin_s->sin_addr), sizeof(struct in_addr)) == 0)
+		memcpy(RESP + 1, tmp_node->local_sin_s, sizeof(struct sockaddr_in));
+	else
+		memcpy(RESP + 1, tmp_node->recv_sin_s, sizeof(struct sockaddr_in));
 	
 	set_rec_timeout(0, 1);	
 	for(i = 0; i < MAX_TRY; i++){
@@ -205,10 +208,14 @@ int Send_M_IP(char * name){
 	if(tmp_node == NULL) return -1;
 
 	RESP[0] = RESP_M_IP;
-	memcpy(RESP + 1, tmp_node->recv_sin_m, sizeof(struct sockaddr_in));
+
+	if(memcmp(&(tmp_node->recv_sin_m->sin_addr), &(tmp_node->recv_sin_s->sin_addr), sizeof(struct in_addr)) == 0)
+		memcpy(RESP + 1, tmp_node->local_sin_m, sizeof(struct sockaddr_in));
+	else
+		memcpy(RESP + 1, tmp_node->recv_sin_m, sizeof(struct sockaddr_in));
 	
 	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)tmp_node->recv_sin_s, recv_sin_len);
-	printf("Send master ip to slave!%s\n", inet_ntoa(tmp_node->recv_sin_m->sin_addr));
+	printf("Send master ip to slave!%s\n", inet_ntoa(((struct sockaddr_in *)(RESP + 1))->sin_addr));
 
 	return 0;
 }
@@ -223,6 +230,7 @@ int Send_M_POL_REQ(char * name){
 	RESP[0] = M_POL_REQ;
 	
 	sendto(sfd, RESP, sizeof(RESP), 0, (struct sockaddr *)tmp_node->recv_sin_m, recv_sin_len);
+	printf("Send slave ip to master!%s\n", inet_ntoa(((struct sockaddr_in *)(RESP))->sin_addr));
 
 	return 0;
 }
